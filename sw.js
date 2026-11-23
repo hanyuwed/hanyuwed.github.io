@@ -1,6 +1,6 @@
 const BASE=new URL(self.registration.scope);
 const CACHE_PREFIX=`hanyuwed:${BASE.pathname}:`;
-const CACHE=CACHE_PREFIX+'v1';
+const CACHE=CACHE_PREFIX+'v2';
 const assetUrl=path=>new URL(path,BASE).href;
 const ASSETS=['./','index.html','style.css','data.js','uz-words.js','app.js','audio-player.js','manifest.webmanifest','icon.svg','icon-192.png','icon-512.png','apple-touch-icon.png'].map(assetUrl);
 const AUDIO=Array.from({length:282},(_,i)=>assetUrl(`audio/${i+1}.mp3`));

@@ -18,7 +18,7 @@ const translatedAttributes = ['aria-label', 'placeholder', 'title'].flatMap(name
 );
 function renderLanguage() {
   document.documentElement.lang = language;
-  document.title = t('汉语 — Карточки китайского', '汉语 — Xitoy tili kartochkalari');
+  document.title = t('hanyuwed — Карточки китайского', 'hanyuwed — Xitoy tili kartochkalari');
   $('languageRu').setAttribute('aria-pressed', String(language === 'ru'));
   $('languageUz').setAttribute('aria-pressed', String(language === 'uz'));
   for (const {node, ru, uz} of staticTranslations) {
