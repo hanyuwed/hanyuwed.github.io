@@ -1,0 +1,181 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'self'; style-src 'self'; img-src 'self'; connect-src 'self'; worker-src 'self'; manifest-src 'self'; base-uri 'none'; form-action 'none'">
+<link rel="manifest" href="../manifest.webmanifest">
+<link rel="icon" href="../icon.svg">
+<link rel="apple-touch-icon" href="../apple-touch-icon.png">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#f6f3ed">
+<meta name="description" content="Тренажёр слов SNU Korean 1A с карточками, словарём и проверкой ответов на русском и узбекском.">
+<title>HanyuWed · Корейский</title>
+<link rel="stylesheet" href="./styles.css">
+</head>
+<body>
+<div class="app">
+  <header>
+    <a class="brand" href="../" title="Выбрать курс" data-uz-title="Kurs tanlash"><span class="seal" aria-hidden="true">한</span><div><strong>HanyuWed</strong><small data-uz="Koreys tili · SNU 1A">Корейский · SNU 1A</small></div></a>
+    <div id="languages" class="languages" role="group" aria-label="Язык" data-uz-aria-label="Til">
+      <button type="button" data-language="ru" aria-label="Русский" lang="ru">RU</button>
+      <button type="button" data-language="uz" aria-label="O‘zbekcha" lang="uz">UZ</button>
+    </div>
+  </header>
+  <main>
+    <a class="course-back meta" href="../" data-uz="Kurs tanlash">Выбрать курс</a>
+    <h1 id="heading">Выбери уроки</h1>
+    <p class="intro" id="intro"></p>
+    <nav class="nav" aria-label="Разделы" data-uz-aria-label="Bo‘limlar">
+      <button type="button" data-view="units" data-uz="Darslar">Уроки</button>
+      <button type="button" data-view="cards" data-uz="Kartochkalar">Карточки</button>
+      <button type="button" data-view="practice" data-uz="Mashq">Проверка</button>
+      <button type="button" data-view="dictionary" data-uz="Lug‘at">Словарь</button>
+    </nav>
+    <section id="units">
+      <div class="bar">
+        <button type="button" id="select-all" class="quiet" data-uz="Hammasini tanlash">Выбрать все</button>
+        <button type="button" id="clear-units" class="quiet" data-uz="Tanlovni bekor qilish">Снять выбор</button>
+      </div>
+      <div id="unit-grid" class="tile-grid"></div>
+      <details id="extras">
+        <summary data-uz="Qo‘shimcha materiallar">Дополнительные материалы</summary>
+        <div id="extra-grid" class="tile-grid"></div>
+      </details>
+      <details id="reading-guide">
+        <summary data-uz="Hangulni qanday o‘qish kerak">Как читать хангыль</summary>
+        <p class="meta" data-uz="Harflar bo‘g‘in bloklariga birikadi. Boshlang‘ich ㅇ unli oldidan o‘qilmaydi, oxirida esa ng tovushini bildiradi. Bo‘g‘in oxiridagi undosh 받침 deyiladi.">Буквы собираются в слоговые блоки. В начале блока ㅇ перед гласной не звучит, в конце обозначает [ŋ]. Конечная согласная в блоке называется 받침.</p>
+        <p lang="ko">ㄱ + ㅏ → 가 · ㅂ + ㅏ + ㅇ → 방 · 가방</p>
+        <div class="bar" id="letter-choices" role="group" aria-label="Собери слог 가" data-uz-aria-label="가 bo‘g‘inini yig‘ing">
+          <span class="meta" data-uz="가 bo‘g‘inini yig‘ing">Собери слог 가</span>
+          <div class="choices"><button type="button" lang="ko">ㄱ</button><button type="button" lang="ko">ㅏ</button><button type="button" lang="ko">ㅗ</button></div>
+          <span id="letter-status" class="meta" role="status"></span>
+        </div>
+        <div class="row below" id="syllable-choices" role="group" aria-label="Собери слово" data-uz-aria-label="So‘zni yig‘ing">
+          <div class="choices"><button type="button" lang="ko">가</button><button type="button" lang="ko">방</button><button type="button" lang="ko">고</button></div>
+          <button type="button" id="clear-syllable" class="quiet" data-uz="Tozalash">Очистить</button>
+        </div>
+        <p class="meta" data-uz="Sumka so‘zini yig‘ing.">Собери слово «сумка».</p>
+        <p id="syllable-result" lang="ko"></p>
+        <p id="syllable-status" class="meta" role="status"></p>
+        <p class="meta" data-uz="Yozilishi 학교 va 읽다. Talaffuzi [학꾜] va [익따]. 읽어 talaffuzida [일거] eshitiladi.">Пишем 학교 и 읽다, произносим [학꾜] и [익따]. В форме 읽어 слышим [일거].</p>
+        <p class="meta" data-uz="Tinglang va tovushlarni solishtiring.">Послушай и сравни звуки.</p>
+        <div class="bar"><button type="button" class="btn" data-read="어" lang="ko">♪ 어</button><button type="button" class="btn" data-read="오" lang="ko">♪ 오</button><button type="button" class="btn" data-read="으" lang="ko">♪ 으</button><button type="button" class="btn" data-read="우" lang="ko">♪ 우</button></div>
+        <div class="bar"><button type="button" class="btn" data-read="학교" lang="ko">♪ 학교</button><button type="button" class="btn" data-read="읽다" lang="ko">♪ 읽다</button><button type="button" class="btn" data-read="읽어" lang="ko">♪ 읽어</button></div>
+      </details>
+      <div class="selection">
+        <p id="selection-count" class="meta" role="status"></p>
+        <button type="button" id="start" class="primary" data-uz="Kartochkalarni boshlash">Начать карточки</button>
+      </div>
+    </section>
+    <section id="cards" hidden>
+      <div class="controls">
+        <button type="button" id="card-direction" class="btn"></button>
+        <div id="card-modes" class="choices" role="group" aria-label="Режим карточек" data-uz-aria-label="Kartochkalar rejimi">
+          <button type="button" data-mode="all" data-uz="Barchasi">Все</button>
+          <button type="button" data-mode="hard" id="hard-mode">Трудные</button>
+        </div>
+        <button type="button" id="shuffle" class="quiet" data-uz="Aralashtirish">Перемешать</button>
+      </div>
+      <div id="deck">
+        <div class="row meta"><span id="card-unit"></span><span id="card-position"></span></div>
+        <progress id="card-progress" class="progress" aria-label="Прогресс карточек" data-uz-aria-label="Kartochkalar jarayoni"></progress>
+        <button type="button" class="surface flash" id="flash" aria-expanded="false">
+          <span id="card-word" class="hangul"></span>
+          <span id="card-reading" class="reading"></span>
+          <span id="card-translation" class="meaning"></span>
+          <small id="flip-hint" class="meta"></small>
+        </button>
+        <div class="row below">
+          <div id="card-sounds"><button type="button" id="card-audio" class="quiet" data-uz="Tinglash">Прослушать</button>
+          <button type="button" id="other-audio" class="quiet" lang="ko" hidden>♪ 공</button></div>
+          <button type="button" id="toggle-reading" class="quiet"></button>
+        </div>
+        <div id="grades" class="actions" hidden>
+          <button type="button" id="again" class="btn" data-uz="Hali o‘rganyapman">Ещё учу</button>
+          <button type="button" id="remember" class="primary" data-uz="Esimda">Помню</button>
+        </div>
+        <div class="row deck-footer">
+          <button type="button" id="previous-card" class="btn" data-uz="Oldingi">Назад</button>
+          <button type="button" id="next-card" class="btn" data-uz="Keyingi">Дальше</button>
+        </div>
+      </div>
+      <div id="card-end" class="surface empty" hidden>
+        <h2 id="card-end-title"></h2>
+        <p id="card-end-summary" class="meta"></p>
+        <div class="actions">
+          <button type="button" id="repeat-all" class="primary" data-uz="Barcha kartochkalar">Все карточки</button>
+          <button type="button" id="repeat-hard" class="btn" data-uz="Qiyinlarini takrorlash">Повторить трудные</button>
+        </div>
+      </div>
+      <p id="card-summary" class="meta"></p>
+    </section>
+    <section id="practice" hidden>
+      <div class="controls">
+        <label for="practice-mode"><span data-uz="Mashq turi">Тип задания</span>
+          <select class="btn" id="practice-mode">
+            <option value="meaning" data-uz="So‘z va tarjima">Слова и перевод</option>
+            <option value="spelling" data-uz="Aniq yozish">Точное написание</option>
+            <option value="numbers" data-uz="Sonlar va sanalar">Числа и даты</option>
+            <option value="context" data-uz="Ibora va qo‘shimchalar">Фразы и частицы</option>
+            <option value="dictation" data-uz="Diktant">Диктант</option>
+          </select>
+        </label>
+        <label for="practice-limit"><span data-uz="Savollar soni">Объём</span>
+          <select class="btn" id="practice-limit">
+            <option value="10" data-uz="10 tagacha">До 10 заданий</option>
+            <option value="all" data-uz="Butun bo‘lim">Весь раздел</option>
+          </select>
+        </label>
+        <label id="number-options" for="number-kind" hidden><span data-uz="Son yoki sana turi">Система или формат</span>
+          <select class="btn" id="number-kind">
+            <option value="all" data-uz="Hammasi">Все</option>
+            <option value="native" data-uz="Sof koreyscha sanoq">Исконно корейские</option>
+            <option value="sino" data-uz="Xitoycha asosli sanoq">Китайско-корейские</option>
+            <option value="money" data-uz="Narxlar">Цены</option>
+            <option value="letters" data-uz="Oy va sana · hangulda">Месяцы и даты · хангылем</option>
+            <option value="digits" data-uz="Oy va sana · raqamlar bilan">Месяцы и даты · цифрами</option>
+          </select>
+        </label>
+        <div id="practice-directions" class="choices" role="group" aria-label="Направление проверки" data-uz-aria-label="Mashq yo‘nalishi">
+          <button type="button" data-direction="hangul" id="to-hangul">RU → 한글</button>
+          <button type="button" data-direction="translation" id="to-translation">한글 → RU</button>
+        </div>
+      </div>
+      <p id="practice-notice" class="meta" role="status" hidden></p>
+      <div id="question">
+        <div class="row meta"><span id="question-unit"></span><span id="question-count"></span></div>
+        <progress id="question-progress" class="progress" aria-label="Прогресс проверки" data-uz-aria-label="Mashq jarayoni"></progress>
+        <form id="answer-form" class="surface practice">
+          <div class="prompt" id="prompt"></div>
+          <button type="button" id="listen-question" class="btn" data-uz="Tinglash" hidden>Прослушать</button>
+          <label id="answer-label" for="answer"></label>
+          <input id="answer" type="text" autocomplete="off" autocapitalize="none" spellcheck="false" enterkeyhint="go" aria-describedby="feedback">
+          <div role="status"><p id="feedback"></p><p id="solution" class="reading" hidden></p></div>
+          <div class="actions">
+            <button type="submit" id="check" class="primary" data-uz="Tekshirish">Проверить</button>
+            <button type="button" id="show" class="btn" data-uz="Javobni ko‘rsatish">Показать ответ</button>
+            <button type="button" id="next-question" class="primary" data-uz="Keyingi" hidden>Дальше</button>
+          </div>
+        </form>
+      </div>
+      <div id="practice-end" class="surface empty" hidden>
+        <h2 data-uz="Mashq tugadi">Проверка завершена</h2>
+        <p id="practice-score"></p>
+        <div class="actions">
+          <button type="button" id="restart-practice" class="primary" data-uz="Qaytadan boshlash">Начать заново</button>
+          <button type="button" id="retry-practice" class="btn" data-uz="Xatolarni takrorlash">Повторить ошибки</button>
+        </div>
+      </div>
+    </section>
+    <section id="dictionary" hidden>
+      <label for="search" data-uz="So‘z qidirish">Поиск слов</label>
+      <input id="search" type="search" autocomplete="off" placeholder="Хангыль, чтение или перевод" data-uz-placeholder="Hangul, o‘qilishi yoki tarjima">
+      <p id="search-count" class="meta" role="status"></p>
+      <div id="word-list"></div>
+    </section>
+    <p id="status" class="meta" role="status" hidden></p>
+  </main>
+</div>
+<script type="module" src="./app.js"></script>
+</body>
+</html>
