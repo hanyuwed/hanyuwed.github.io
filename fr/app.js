@@ -259,8 +259,12 @@ function topicsPage() {
     '</div></div></section>';
 }
 
+function hardEntries() {
+  return selectedEntries().filter(entry => progress[entry.id] === 'hard');
+}
+
 function cardsStart() {
-  const queue = selectedEntries().filter(entry => !hardOnly || progress[entry.id] === 'hard');
+  const queue = hardOnly ? hardEntries() : selectedEntries();
   cardState = {queue:shuffle(queue), index:0, back:false};
 }
 
@@ -268,18 +272,25 @@ function cardsPage() {
   if (!cardState) cardsStart();
   const {queue,index,back} = cardState;
   const entry = queue[index];
+  const hardCount = hardEntries().length;
   const toFrench = cardDirection === 'to-fr';
   const controls = '<div class="toolbar">' +
+    actionButton(hardOnly ? t('Все карточки','Barcha kartochkalar') : t('Трудные','Qiyinlar') + ' · ' + hardCount,
+      'hard','secondary','aria-pressed="' + hardOnly + '"') +
     actionButton((toFrench ? lang.toUpperCase() + ' → FR' : 'FR → ' + lang.toUpperCase()),'card-direction','secondary',
       'aria-label="' + esc(t('Сменить направление','Yo‘nalishni almashtirish')) + '"') +
-    actionButton(hardOnly ? t('Только трудные','Faqat qiyinlari') : t('Все карточки','Barcha kartochkalar'),'hard','secondary','aria-pressed="' + hardOnly + '"') +
     actionButton(t('Перемешать','Aralashtirish'),'shuffle','text-button') + '</div>';
+  const backButton = actionButton(t('Назад','Oldingi'),'previous-card','secondary',index===0 ? 'disabled' : '');
   if (!entry) return '<section class="study stack">' + controls +
     '<div class="box stack"><p>' + (queue.length ? t('Повторение завершено.','Takrorlash tugadi.') :
-      hardOnly ? t('В этих темах пока нет трудных карточек.','Bu mavzularda qiyin kartochkalar yo‘q.') :
+      hardOnly ? t('В выбранных темах пока нет трудных карточек. Отмечай их кнопкой «Ещё учу».',
+        'Tanlangan mavzularda qiyin kartochkalar yo‘q. Ularni «Hali o‘rganyapman» tugmasi bilan belgila.') :
       t('Выбери хотя бы одну тему.','Kamida bitta mavzuni tanlang.')) + '</p>' +
-    (queue.length ? actionButton(t('Начать заново','Qayta boshlash'),'shuffle') : '') +
-    '<a href="#topics">' + t('Выбрать темы','Mavzularni tanlash') + '</a></div></section>';
+    '<div class="row">' +
+    (queue.length ? backButton + actionButton(t('Начать заново','Qayta boshlash'),'shuffle') : '') +
+    (hardCount ? actionButton(t('Повторить трудные','Qiyinlarini takrorlash') + ' · ' + hardCount,
+      'repeat-hard','primary') : '') +
+    '<a href="#topics">' + t('Выбрать темы','Mavzularni tanlash') + '</a></div></div></section>';
   const example = lexicalExample(entry);
   const text = back ? (toFrench ? entry.fr : translation(entry)) : (toFrench ? translation(entry) : entry.fr);
   const displayFrench = back === toFrench;
@@ -292,7 +303,9 @@ function cardsPage() {
     '<span class="flip-hint">' + (back ? t('Вернуться к вопросу','Savolga qaytish') : t('Показать ответ','Javobni ko‘rish')) + '</span></button>' +
     '<div class="study-nav">' + (back || !toFrench ? sound(entry.fr) : '<span></span>') +
     '<div class="row">' + actionButton(t('Ещё учу','Hali o‘rganyapman'),'grade-hard','secondary',back ? '' : 'disabled') +
-    actionButton(t('Помню','Esimda'),'grade-known','primary',back ? '' : 'disabled') + '</div></div>' + soundRegion() + '</section>';
+    actionButton(t('Помню','Esimda'),'grade-known','primary',back ? '' : 'disabled') + '</div></div>' +
+    '<div class="row">' + backButton +
+    actionButton(t('Вперёд','Keyingi'),'next-card') + '</div>' + soundRegion() + '</section>';
 }
 
 const FORMS = {
@@ -450,7 +463,7 @@ function practiceStart(items) {
   const pool = items || shuffle(exercisePool());
   const queue = items || (settings.amount==='all' ? pool : pool.slice(0,Number(settings.amount)));
   if (!queue.length) return false;
-  practice = {queue,index:0,replies:[],draft:'',feedback:null,finished:false};
+  practice = {queue,index:0,replies:[],languageSessions:new Map()};
   return true;
 }
 
@@ -523,15 +536,19 @@ function practiceOptions() {
 function resultPage() {
   const wrong = practice.queue.filter((_,index)=>!practice.replies[index]?.firstCorrect);
   const corrected = practice.replies.filter(reply=>!reply.firstCorrect&&reply.correct).length;
+  const skipped = practice.queue.filter((_,index)=>!practice.replies[index]?.attempts && !practice.replies[index]?.shown).length;
   return '<section class="box stack"><h2>'+t('Результат','Natija')+'</h2><p>'+
     t('Верно с первой попытки: ','Birinchi urinishda to‘g‘ri: ')+(practice.queue.length-wrong.length)+' / '+practice.queue.length+
-    ' · '+t('Исправлено: ','Tuzatildi: ')+corrected+'</p><div class="row">'+
+    ' · '+t('Исправлено: ','Tuzatildi: ')+corrected+' · '+t('Пропущено: ','O‘tkazib yuborildi: ')+skipped+'</p><div class="row">'+
+    actionButton(t('Назад','Oldingi'),'previous-question','secondary')+
     (wrong.length?actionButton(t('Повторить ошибки','Xatolarni takrorlash'),'retry','primary'):'')+
     actionButton(t('Настроить практику','Mashqni sozlash'),'practice-settings')+'<a href="#topics">'+t('Выбрать темы','Mavzularni tanlash')+'</a></div></section>';
 }
 
 function questionPage() {
   const item = practice.queue[practice.index];
+  const reply = practice.replies[practice.index];
+  const last = practice.index === practice.queue.length - 1;
   const accents = item.fr ? '<div class="accent-bar" aria-label="'+t('Французские знаки','Fransuzcha belgilar')+'">'+
     [...'éèêëàâîïôùûüçœ’'].map(letter=>actionButton(letter,'accent','accent-key','data-letter="'+letter+'"')).join('')+'</div>' : '';
   const detail = item.transcripts ? '<details><summary>'+t('Контекст по смыслу','Ma’no bo‘yicha yordam')+'</summary><p>'+
@@ -543,16 +560,19 @@ function questionPage() {
       esc(item.title)+'</p>':'')+
     (item.clip?'<div>'+sound(item.clip)+'</div>'+detail:'')+
     '<form id="answer-form" class="answer-form" novalidate><label class="field"><span>'+t('Твой ответ','Javobingiz')+
-    '</span><input id="answer" type="text" lang="'+(item.fr?'fr':lang)+'" value="'+esc(practice.draft)+
+    '</span><input id="answer" type="text" lang="'+(item.fr?'fr':lang)+'" value="'+esc(reply?.draft || '')+
     '" aria-describedby="instruction feedback" autocapitalize="off" autocorrect="off" spellcheck="false" autocomplete="off"></label>'+accents+
     '<div id="feedback" class="feedback" role="status" aria-live="polite"></div><div class="row answer-actions"><button class="primary" id="check" type="submit">'+
     t('Проверить','Tekshirish')+'</button>'+actionButton(t('Показать ответ','Javobni ko‘rish'),'reveal','text-button','id="reveal"')+
-    actionButton(t('Дальше','Keyingi'),'next','primary','id="next" hidden')+'</div></form>'+soundRegion()+'</section>';
+    '</div></form><div class="row">'+
+    actionButton(t('Назад','Oldingi'),'previous-question','secondary',practice.index===0 ? 'disabled' : '')+
+    actionButton(last ? t('Результат','Natija') : t('Вперёд','Keyingi'),'next-question','secondary','id="next"')+
+    '</div>'+soundRegion()+'</section>';
 }
 
 function practicePage() {
   const tabs = Object.entries(MODES).map(([id,label])=>anchor(id==='writing'?'practice':'practice/'+id,tr(label),mode===id)).join('');
-  const body = practice ? (practice.finished ? resultPage() : questionPage()) : practiceOptions();
+  const body = practice ? (practice.index===practice.queue.length ? resultPage() : questionPage()) : practiceOptions();
   return '<section class="practice stack"><nav class="tabs mode-nav" aria-label="'+
     t('Тип практики','Mashq turi')+'">'+tabs+'</nav>'+body+'</section>';
 }
@@ -633,7 +653,7 @@ function render() {
     dictionary:dictionaryPage
   })[view]();
   if (view==='dictionary') $('word-list').innerHTML = dictionaryResults();
-  if (view==='practice' && practice && !practice.finished) updateFeedback();
+  if (view==='practice' && practice && practice.index<practice.queue.length) updateFeedback();
 }
 
 const MESSAGES = {
@@ -654,12 +674,11 @@ function updateFeedback() {
   const reply = practice.replies[practice.index];
   const item = practice.queue[practice.index];
   const box = $('feedback');
-  const status = practice.feedback;
+  const status = reply?.feedback;
   const locked = reply?.correct || reply?.shown;
   $('answer').readOnly = Boolean(locked);
   $('check').hidden = Boolean(locked);
   $('reveal').hidden = Boolean(locked);
-  $('next').hidden = !locked;
   for (const button of document.querySelectorAll('[data-action=accent]')) button.disabled = Boolean(locked);
   box.replaceChildren();
   delete box.dataset.state;
@@ -668,7 +687,7 @@ function updateFeedback() {
   const explain = !['correct','shown','empty','negation','question-mark','accent','article','elision'].includes(status) && item.rule;
   box.textContent = tr(MESSAGES[status]) + (explain ? ' ' + tr(item.rule) : '');
   if (status==='accent') {
-    const match = item.accepted.find(variant=>searchSpelling(answerSpelling(variant,item))===searchSpelling(answerSpelling(practice.draft,item)));
+    const match = item.accepted.find(variant=>searchSpelling(answerSpelling(variant,item))===searchSpelling(answerSpelling(reply.draft,item)));
     box.append(' '+ (match || item.accepted[0]));
   }
   if (locked) {
@@ -681,7 +700,7 @@ function updateFeedback() {
 }
 
 function replyRecord() {
-  return practice.replies[practice.index] ||= {attempts:0,firstCorrect:false,correct:false,shown:false};
+  return practice.replies[practice.index] ||= {draft:'',feedback:null,attempts:0,firstCorrect:false,correct:false,shown:false};
 }
 
 function saveReply(item, reply) {
@@ -694,15 +713,14 @@ function saveReply(item, reply) {
 }
 
 function check() {
-  if (!practice || practice.finished) return;
-  const current = practice.queue[practice.index];
-  const old = practice.replies[practice.index];
-  if (old?.correct || old?.shown) return;
-  practice.draft = $('answer').value;
-  const result = evaluateAnswer(practice.draft,current);
-  practice.feedback = result;
+  const current = practice?.queue[practice.index];
+  if (!current) return;
+  const reply = replyRecord();
+  if (reply.correct || reply.shown) return;
+  reply.draft = $('answer').value;
+  const result = evaluateAnswer(reply.draft,current);
+  reply.feedback = result;
   if (result!=='empty') {
-    const reply = replyRecord();
     const prior = reply.attempts;
     reply.attempts += 1;
     if (result==='correct') {
@@ -720,22 +738,20 @@ function displayAnswer() {
   const reply = replyRecord();
   if (reply.correct || reply.shown) return;
   reply.shown = true;
-  practice.feedback = 'shown';
+  reply.feedback = 'shown';
   saveReply(item,reply);
   updateFeedback();
   $('next').focus();
 }
 
-function nextQuestion() {
-  const reply = practice.replies[practice.index];
-  if (!reply?.correct && !reply?.shown) return;
+function moveQuestion(offset) {
+  const index = practice.index + offset;
+  if (index < 0 || index > practice.queue.length) return;
   clearSound();
-  practice.index++;
-  practice.draft = '';
-  practice.feedback = null;
-  practice.finished = practice.index===practice.queue.length;
+  practice.index = index;
   render();
   $('answer')?.focus();
+  if (!$('answer')) main.querySelector('[data-action="previous-question"]')?.focus();
 }
 
 function clearSound() {
@@ -780,14 +796,16 @@ window.addEventListener('storage',event=>{
 
 function setLanguage(language) {
   if (language===lang) return;
+  const previous = lang;
   lang = language;
   try { localStorage.setItem(languageKey,lang); } catch { storage.available = false; }
   if (practice && mode==='writing') {
     practice.queue = practice.queue.map(item=>lexExercise(item.entry,settings.direction==='to-fr'));
-    if (!practice.finished && settings.direction==='from-fr') {
-      practice.draft = '';
-      practice.feedback = null;
-      delete practice.replies[practice.index];
+    if (settings.direction==='from-fr') {
+      practice.languageSessions.set(previous,{index:practice.index,replies:practice.replies});
+      const session = practice.languageSessions.get(lang);
+      practice.index = session?.index ?? 0;
+      practice.replies = session?.replies ?? [];
     }
   }
   clearSound();
@@ -833,7 +851,17 @@ document.addEventListener('click',event=>{
   if (action==='flip') { cardState.back = !cardState.back; }
   if (action==='shuffle') cardsStart();
   if (action==='card-direction') { cardDirection = cardDirection==='to-fr'?'from-fr':'to-fr'; if (cardState) cardState.back=false; }
-  if (action==='hard') { hardOnly=!hardOnly; cardsStart(); }
+  if (action==='hard'||action==='repeat-hard') {
+    hardOnly = action==='repeat-hard' || !hardOnly;
+    cardsStart();
+  }
+  if (action==='previous-card'||action==='next-card') {
+    const offset = action==='previous-card' ? -1 : 1;
+    const index = cardState.index + offset;
+    if (index < 0 || index > cardState.queue.length) return;
+    cardState.index = index;
+    cardState.back = false;
+  }
   if (action==='grade-hard'||action==='grade-known') {
     if (!cardState?.back) return;
     const entry = cardState.queue[cardState.index];
@@ -857,7 +885,10 @@ document.addEventListener('click',event=>{
     if (wrong.length) practiceStart(wrong);
   }
   if (action==='reveal') { displayAnswer(); return; }
-  if (action==='next') { nextQuestion(); return; }
+  if (action==='previous-question'||action==='next-question') {
+    moveQuestion(action==='previous-question' ? -1 : 1);
+    return;
+  }
   if (action==='accent') {
     const input = $('answer');
     input.setRangeText(letter,input.selectionStart,input.selectionEnd,'end');
@@ -867,7 +898,9 @@ document.addEventListener('click',event=>{
   }
   clearSound();
   render();
-  if (action==='flip'||action.startsWith('grade-')) main.querySelector('.flashcard')?.focus();
+  if (action==='flip'||action.startsWith('grade-')||action.endsWith('-card')) {
+    main.querySelector('.flashcard')?.focus();
+  }
   if (action==='start-practice'||action==='retry') $('answer')?.focus();
 });
 
@@ -878,8 +911,9 @@ main.addEventListener('submit',event=>{
 });
 main.addEventListener('input',event=>{
   if (event.target.id==='answer' && practice && !event.target.readOnly) {
-    practice.draft = event.target.value;
-    practice.feedback = null;
+    const reply = replyRecord();
+    reply.draft = event.target.value;
+    reply.feedback = null;
     updateFeedback();
   }
   if (event.target.id==='word-query') {
