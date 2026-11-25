@@ -1,8 +1,17 @@
 const BASE=new URL(self.registration.scope);
 const CACHE_PREFIX=`hanyuwed:${BASE.pathname}:`;
-const CACHE=CACHE_PREFIX+'v4';
+const CACHE=CACHE_PREFIX+'v5';
 const assetUrl=path=>new URL(path,BASE).href;
-const ASSETS=['./','index.html','style.css','data.js','uz-words.js','app.js?v=3','audio-player.js','pinyin-practice.js','manifest.webmanifest','icon.svg','icon-192.png','icon-512.png','apple-touch-icon.png'].map(assetUrl);
+const PAGES=new Map([
+  ['./','./'],['index.html','./'],['chinese.html','chinese.html'],
+  ['fr','fr/'],['fr/','fr/'],['fr/index.html','fr/'],
+].map(([path,canonical])=>[new URL(path,BASE).pathname,assetUrl(canonical)]));
+const ASSETS=[
+  './','index.html','chinese.html','courses.css','courses.js',
+  'style.css','data.js','uz-words.js','app.js?v=3','audio-player.js','pinyin-practice.js',
+  'manifest.webmanifest','icon.svg','icon-192.png','icon-512.png','apple-touch-icon.png',
+  'fr/','fr/index.html','fr/styles.css','fr/course-data.js','fr/grammar.js','fr/answers.js','fr/app.js',
+].map(assetUrl);
 const AUDIO=Array.from({length:282},(_,i)=>assetUrl(`audio/${i+1}.mp3`));
 self.addEventListener('install',event=>event.waitUntil((async()=>{
   const cache=await caches.open(CACHE);
@@ -32,9 +41,10 @@ self.addEventListener('fetch',event=>{
   const request=event.request,url=new URL(request.url);
   if(request.method!=='GET'||url.origin!==BASE.origin||!url.pathname.startsWith(BASE.pathname))return;
   if(AUDIO.includes(url.href)){event.respondWith(audioResponse(request,url.href));return;}
-  if(!ASSETS.includes(url.href))return;
+  const page=request.mode==='navigate'?PAGES.get(url.pathname):undefined;
+  if(!page&&!ASSETS.includes(url.href))return;
   event.respondWith(fetch(request).then(response=>{
     if(response.ok&&response.type==='basic'&&!response.redirected&&response.status===200){const copy=response.clone();event.waitUntil(caches.open(CACHE).then(c=>c.put(request,copy)));}
     return response;
-  }).catch(()=>caches.open(CACHE).then(async c=>(await c.match(request))||(request.mode==='navigate'?(await c.match(BASE.href))||Response.error():Response.error()))));
+  }).catch(()=>caches.open(CACHE).then(async c=>(await c.match(request))||(page&&(await c.match(page)))||Response.error())));
 });

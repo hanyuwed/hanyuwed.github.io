@@ -1,0 +1,5 @@
+.course-list { list-style: none; margin: 0; padding: 0; }
+.course-list .course-link { min-height: 108px; }
+.course-list .course-link:hover { border-color: #829582; }
+.course-list .unit-title { font-size: 19px; }
+.course-list .french-symbol { font-family: Georgia, serif; }
