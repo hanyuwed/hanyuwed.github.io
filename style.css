@@ -17,3 +17,78 @@
 .tabs .tab-label,.segments .segment-label,.under-card .speak-label{background:none;margin:0;padding:0;font:inherit;color:inherit}
 #directionLabel{font-weight:inherit}
 .assess #remember .remember-label{margin:0}
+
+.tabs{gap:clamp(10px,3.7vw,23px)}
+.tabs button{white-space:nowrap}
+.pinyin-toolbar{
+  display:flex;
+  flex-wrap:wrap;
+  align-items:center;
+  justify-content:space-between;
+  gap:12px;
+  margin:22px 0 16px;
+}
+.pinyin-toolbar .unit-change{max-width:100%}
+#pinyinUnitLabel{overflow-wrap:anywhere}
+.pinyin-kinds{
+  display:inline-flex;
+  gap:3px;
+  padding:3px;
+  border-radius:10px;
+  background:#eaeae1;
+}
+.pinyin-kinds button{
+  min-height:40px;
+  padding:5px 10px;
+  border-radius:7px;
+  background:transparent;
+  font-size:14px;
+}
+.pinyin-kinds button[aria-pressed="true"]{
+  background:var(--paper);
+  box-shadow:0 1px 3px #3331;
+  color:var(--green);
+  font-weight:600;
+}
+.pinyin-position{
+  margin:0 0 8px;
+  text-align:right;
+  font-size:13px;
+  color:var(--muted);
+  font-variant-numeric:tabular-nums;
+}
+.pinyin-card{
+  border:1px solid #e6e3d9;
+  border-radius:18px;
+  background:var(--paper);
+  box-shadow:0 7px 20px #42452606;
+  padding:20px clamp(14px,5vw,32px) 24px;
+}
+.pinyin-prompt{
+  margin:0 auto 18px;
+  text-align:center;
+  font-size:clamp(2.65rem,13vw,5rem);
+  letter-spacing:0;
+  overflow-wrap:anywhere;
+}
+.pinyin-form{margin:auto;max-width:410px}
+.pinyin-form label{display:block;font-size:14px;font-weight:600;margin-bottom:7px}
+.pinyin-form input{
+  width:100%;
+  min-height:48px;
+  border:1px solid #aeb5a7;
+  border-radius:9px;
+  background:var(--paper);
+  color:var(--ink);
+  font-size:18px;
+  padding:10px 12px;
+}
+.pinyin-form input[aria-invalid="true"]{border-color:var(--red)}
+.pinyin-tip,.pinyin-feedback{margin:8px 0;font-size:14px}
+.pinyin-tip,.pinyin-empty,.pinyin-feedback[data-result="empty"]{color:var(--muted)}
+.pinyin-feedback:empty{margin:0}
+.pinyin-feedback[data-result="correct"],.pinyin-feedback[data-result="revealed"]{color:var(--green);font-weight:600}
+.pinyin-feedback[data-result="incorrect"]{color:var(--red)}
+.pinyin-actions{display:flex;flex-wrap:wrap;gap:8px;margin-top:14px}
+.pinyin-actions button{flex:1 1 125px;width:auto;min-height:44px;margin:0;padding:10px 8px;font-size:14px}
+.pinyin-empty{margin:25px 0;font-size:15px}

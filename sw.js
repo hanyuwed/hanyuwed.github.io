@@ -1,8 +1,8 @@
 const BASE=new URL(self.registration.scope);
 const CACHE_PREFIX=`hanyuwed:${BASE.pathname}:`;
-const CACHE=CACHE_PREFIX+'v3';
+const CACHE=CACHE_PREFIX+'v4';
 const assetUrl=path=>new URL(path,BASE).href;
-const ASSETS=['./','index.html','style.css','data.js','uz-words.js','app.js?v=2','audio-player.js','manifest.webmanifest','icon.svg','icon-192.png','icon-512.png','apple-touch-icon.png'].map(assetUrl);
+const ASSETS=['./','index.html','style.css','data.js','uz-words.js','app.js?v=3','audio-player.js','pinyin-practice.js','manifest.webmanifest','icon.svg','icon-192.png','icon-512.png','apple-touch-icon.png'].map(assetUrl);
 const AUDIO=Array.from({length:282},(_,i)=>assetUrl(`audio/${i+1}.mp3`));
 self.addEventListener('install',event=>event.waitUntil((async()=>{
   const cache=await caches.open(CACHE);
