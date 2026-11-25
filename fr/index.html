@@ -1,0 +1,43 @@
+<!doctype html>
+<html lang="ru">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+  <meta name="theme-color" content="#f6f3ed">
+  <title>hanyuwed — Карточки французского</title>
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+  <div class="app">
+    <header>
+      <a href="../" class="brand">
+        <span class="seal" aria-hidden="true">学</span>
+        <span>hanyuwed<small id="brand-course">Французский по карточкам</small></span>
+      </a>
+      <div class="header-tools">
+        <div class="language-switch" role="group" id="language-switch" aria-label="Язык обучения">
+          <button type="button" data-lang="ru" lang="ru" aria-label="Русский">RU</button>
+          <button type="button" data-lang="uz" lang="uz" aria-label="O‘zbekcha">UZ</button>
+        </div>
+        <button id="help" type="button" class="icon" data-action="help" aria-label="Как пользоваться">?</button>
+      </div>
+    </header>
+    <main>
+      <a href="../" id="course-picker" class="text-button course-picker">Выбрать язык</a>
+      <div class="intro">
+        <span class="eyebrow" lang="fr">FRANÇAIS</span>
+        <h1 id="page-title">Выбери темы.</h1>
+        <p id="page-subtitle">Можно повторять одну тему или смешать несколько.</p>
+      </div>
+      <nav id="nav" class="tabs" aria-label="Разделы"></nav>
+      <div id="main"></div>
+    </main>
+    <footer><span lang="fr">HanyuWed</span><p id="footer-detail"></p></footer>
+  </div>
+  <dialog id="help-dialog" aria-labelledby="help-title"></dialog>
+  <script src="course-data.js" defer></script>
+  <script src="grammar.js" defer></script>
+  <script src="answers.js" defer></script>
+  <script src="app.js" defer></script>
+</body>
+</html>
