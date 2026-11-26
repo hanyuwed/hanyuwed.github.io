@@ -1,5 +1,6 @@
 import { entries, units } from './data.js';
 import { approvedAnswer, bareArabic, cleanTranslation, graphemes, searchArabic } from './answers.js';
+import { recordings } from './speech-data.js';
 
 const $ = id => document.getElementById(id);
 const byId = new Map(entries.map(entry => [entry.id, entry]));
@@ -56,7 +57,7 @@ let filterUnit = 0;
 let filterKind = 'all';
 let filterHard = false;
 let search = '';
-let voices = [];
+let activeAudio = null;
 let alphabet = { answer:'', index:0, feedback:'', played:false };
 let audioNote = '';
 
@@ -70,7 +71,7 @@ const alphabetQuestions = [
   { text:['Найди букву «ха» без точки.','Nuqtasiz «ha» harfini top.'], options:['ج','ح','خ'], answer:'ح' },
   { text:['Какая буква прерывает соединение в слове بَاب?','بَاب so‘zida qaysi harf ulanishni to‘xtatadi?'], options:['ب','ا'], answer:'ا' },
   { text:['Выбери долгий слог «баа».','Cho‘ziq «baa» bo‘g‘inini tanla.'], options:['بَ','بَا','بُ'], answer:'بَا' },
-  { text:['Послушай и выбери услышанную букву.','Tinglab, eshitgan harfingni tanla.'], audio:'صَاد', options:['س','ص'], answer:'ص' },
+  { text:['Послушай и выбери услышанную букву.','Tinglab, eshitgan harfingni tanla.'], audio:'alphabet-sad', options:['س','ص'], answer:'ص' },
   { text:['Какое слово означает «город»?','Qaysi so‘z «shahar» degani?'], options:['مَدْرَسَة','مَدِينَة','جَامِعَة'], answer:'مَدِينَة' }
 ];
 
@@ -152,13 +153,18 @@ function renderAlphabet() {
     [t('Краткие и долгие гласные','Qisqa va cho‘ziq unlilar'),t('Фатха, касра и дамма дают короткие звуки а, и, у. Сукун обозначает отсутствие гласного, шадда удваивает согласную, танвин добавляет звук н.','Fatha, kasra va damma qisqa a, i, u tovushlarini bildiradi. Sukun unli yo‘qligini, shadda undosh ikkilanishini, tanvin esa n tovushini bildiradi.'),'بَ بِ بُ · بَا بِي بُو · بْ بّ بً بٍ بٌ'],
     [t('Звуки и особые написания','Tovushlar va maxsus yozuvlar'),t('Сравни звучание похожих букв. В артикле ال буква ل остаётся на письме, даже когда сливается со следующим звуком.','O‘xshash harflarning talaffuzini solishtir. ال artiklidagi ل harfi keyingi tovushga qo‘shilsa ham yozuvda qoladi.'),'س ص · ت ط · ح ه · ع ء · ك ق · ة ه · ى ي · الشَّمْس وَالْقَمَر']
   ];
-  const notes = lines.map(([title,note,samples]) => '<div class="surface lesson-box"><h2>' + escape(title) +
-    '</h2><p>' + escape(note) + '</p><div dir="rtl">' + arabic(samples) + '</div></div>').join('');
+  const examples = [
+    ['reading-letters','ب ت ث'], ['reading-door','بَاب'],
+    ['reading-vowels','بَ بِ بُ · بَا بِي بُو'], ['reading-sun-moon','الشَّمْس وَالْقَمَر']
+  ];
+  const notes = lines.map(([title,note,samples],index) => '<div class="surface lesson-box"><h2>' + escape(title) +
+    '</h2><p>' + escape(note) + '</p><div dir="rtl">' + arabic(samples) + '</div>' +
+    button(t('Прослушать','Tinglash') + ' · ' + arabic(examples[index][1]),'play',
+      {value:examples[index][0],raw:true}) + '</div>').join('');
   const choices = question.options.map(option => button(arabic(option),'letter-option',{
     raw:true,value:option,pressed:alphabet.answer === option,disabled:!!question.audio && !alphabet.played
   })).join('');
-  const sound = question.audio ? (voices.length ? button(t('Прослушать','Tinglash'),'letter-audio') :
-    '<p class="meta">' + t('Арабский голос недоступен. Перейди к следующему заданию.','Arabcha ovoz mavjud emas. Keyingi mashqqa o‘t.') + '</p>') : '';
+  const sound = question.audio ? button(t('Прослушать','Tinglash'),'letter-audio') : '';
   const prompt = question.text[lang === 'ru' ? 0 : 1];
   return '<div id="study-alphabet">' + notes + '</div><div class="surface practice"><h2>' +
     t('Проверь себя','O‘zingni tekshir') + '</h2>' + progress(alphabet.index + 1, alphabetQuestions.length) +
@@ -197,9 +203,10 @@ function renderCards() {
   return controls + progress(deck.index + 1, deck.queue.length) + '<div class="surface">' +
     '<button type="button" class="flash btn" data-action="flip" aria-expanded="' + revealed + '" aria-controls="card-detail">' +
     (reverse ? gloss : ar) + '<small class="meta">' + (revealed ? t('Скрыть ответ','Javobni yashirish') :
-      t('Открыть ответ','Javobni ochish')) + '</small></button><div id="card-detail" class="card-detail"' +
-    (revealed ? '' : ' hidden') + '>' + (reverse ? ar : gloss) + '<div class="wrap below">' +
-    soundButton(entry) + '</div></div></div><div class="actions">' +
+      t('Открыть ответ','Javobni ochish')) + '</small></button><div class="card-detail">' +
+    '<div id="card-detail"' + (revealed ? '' : ' hidden') + '>' + (reverse ? ar : gloss) + '</div>' +
+    (!reverse || revealed ? '<div class="wrap below">' + soundButton(entry) + '</div>' : '') +
+    '</div></div><div class="actions">' +
     button(t('Ещё учу','Hali o‘rganyapman'),'grade-hard',{pressed:marks.get(entry.id)==='hard'}) +
     button(t('Помню','Esimda'),'grade-known',{primary:true,pressed:marks.get(entry.id)==='known'}) +
     '</div><div class="actions card-nav">' +
@@ -245,7 +252,7 @@ function eligible(entry) {
 function startPractice(repeat = false) {
   const prior = practice();
   const pool = repeat ? prior.queue.filter(q => q.result !== 'correct').map(q => q.entry) : activePool().filter(eligible);
-  if (!pool.length || (mode === 'dictation' && !voices.length)) return false;
+  if (!pool.length) return false;
   const list = shuffle(pool).slice(0, size || pool.length);
   const choicePool = [...pool, ...entries.filter(entry => !pool.includes(entry))];
   practices.set(lang, { mode, index:0, queue:list.map(entry => makeQuestion(entry, choicePool)) });
@@ -258,15 +265,11 @@ function renderPractice() {
   const session = practice();
   if (!session || session.mode !== mode) {
     const total = activePool().filter(eligible).length;
-    const canStart = total > 0 && (mode !== 'dictation' || voices.length);
-    const note = mode === 'dictation' && !voices.length ?
-      t('На устройстве нет арабского голоса. Можно продолжить с чтением.','Qurilmada arabcha ovoz yo‘q. O‘qish mashqlarini davom ettirish mumkin.') :
-      total ? t('Подходящих карточек: ','Mos kartochkalar: ') + total :
-        t('Выбери уроки с подходящим материалом.','Mos materialli darslarni tanla.');
+    const note = total ? t('Подходящих карточек: ','Mos kartochkalar: ') + total :
+      t('Выбери уроки с подходящим материалом.','Mos materialli darslarni tanla.');
     return options + '<div class="surface empty"><p>' + escape(note) + '</p>' +
-      button(t('Начать','Boshlash'),'start-practice',{primary:true,disabled:!canStart}) +
-      (!total ? button(t('К урокам','Darslarga'),'open-units') : '') +
-      (mode === 'dictation' && !voices.length ? button(t('К чтению','O‘qishga'),'open-alphabet') : '') + '</div>';
+      button(t('Начать','Boshlash'),'start-practice',{primary:true,disabled:!total}) +
+      (!total ? button(t('К урокам','Darslarga'),'open-units') : '') + '</div>';
   }
   const current = session.queue[session.index];
   if (!current) {
@@ -331,7 +334,8 @@ function renderPractice() {
   const solution = isArabic ? arabic(entry.ar) : escape(translation(entry));
   return options + progress(session.index+1,session.queue.length) +
     '<div class="surface practice"><div class="prompt" id="question-prompt">' + prompt + '</div>' +
-    (mode === 'dictation' ? soundButton(entry, true) : '') + input +
+    (mode === 'dictation' || revealed || ['choice','meaning'].includes(mode) ?
+      '<div class="wrap below">' + soundButton(entry, mode === 'dictation') + '</div>' : '') + input +
     '<p id="feedback" role="status" data-tone="' + (correct ? 'good' : 'bad') + '">' +
     (revealed ? explanations[checked] + ' ' + solution : '') + '</p><div class="wrap option-gap">' +
     (revealed ? '' : button(t('Проверить','Tekshirish'),'check',{primary:true,disabled:mode === 'dictation' && !current.heard}) +
@@ -406,32 +410,29 @@ function renderDictionary() {
     '<span id="result-count" class="meta" role="status"></span></div><div id="word-list"></div>';
 }
 
-function refreshVoices() {
-  voices = (window.speechSynthesis?.getVoices() ?? []).filter(voice => /^ar([-_]|$)/i.test(voice.lang));
-}
 function soundButton(entry, dictation = false) {
-  if (!voices.length) return dictation ?
-    '<p class="meta">' + t('Арабский голос сейчас недоступен.','Arabcha ovoz hozir mavjud emas.') + '</p>' : '';
   return button(t('Прослушать','Tinglash'),dictation ? 'play-question' : 'play',{value:entry.id});
 }
-function speak(text) {
-  if (!voices.length) return false;
-  const utterance = new SpeechSynthesisUtterance(text);
-  utterance.voice = voices[0];
-  utterance.lang = voices[0].lang;
-  utterance.rate = 0.84;
-  utterance.onerror = event => {
-    if (['canceled','interrupted'].includes(event.error)) return;
-    audioNote = t('Не удалось воспроизвести арабский звук.','Arabcha ovozni ijro etib bo‘lmadi.');
-    const q = practice()?.queue[practice()?.index];
-    if (view === 'practice' && mode === 'dictation' && q?.entry.ar === text) {
-      q.heard = false;
-      render();
-    } else showStatus();
-  };
-  window.speechSynthesis.cancel();
-  window.speechSynthesis.speak(utterance);
-  return true;
+function stopAudio() {
+  activeAudio?.pause();
+  activeAudio = null;
+}
+function playAudio(id, onStart) {
+  stopAudio();
+  audioNote = '';
+  showStatus();
+  const clip = recordings[id];
+  if (!clip) return;
+  const audio = new Audio('data:audio/mpeg;base64,' + clip);
+  activeAudio = audio;
+  audio.play().then(() => {
+    if (activeAudio === audio) onStart?.();
+  }).catch(() => {
+    if (activeAudio !== audio) return;
+    activeAudio = null;
+    audioNote = t('Не удалось воспроизвести звук. Попробуй ещё раз.','Ovozni ijro etib bo‘lmadi. Yana urinib ko‘r.');
+    showStatus();
+  });
 }
 
 const views = {units:renderUnits,alphabet:renderAlphabet,cards:renderCards,practice:renderPractice,dictionary:renderDictionary};
@@ -472,7 +473,7 @@ function render({ focus = false } = {}) {
   else restoreFocus(previous);
 }
 function changeView(next) {
-  window.speechSynthesis?.cancel();
+  stopAudio();
   audioNote = '';
   view = next;
   if (location.hash !== '#' + next) history.pushState(null,'','#' + next);
@@ -482,7 +483,7 @@ function applyLocation() {
   const key = location.hash.slice(1);
   const next = Object.hasOwn(tabs,key) ? key : 'units';
   if (next === view) return;
-  window.speechSynthesis?.cancel();
+  stopAudio();
   view = next;
   render({focus:true});
 }
@@ -517,20 +518,25 @@ document.addEventListener('click', event => {
   if (action === 'open-alphabet') return changeView('alphabet');
   if (action === 'open-units') return changeView('units');
   if (action === 'focus-units') return $('content').querySelector('[data-action=unit]').focus();
-  if (action === 'play') return speak(byId.get(value).ar);
+  if (action === 'play') return playAudio(value);
   if (action === 'play-question' && question) {
-    question.heard = speak(question.entry.ar);
-    const check = $('content').querySelector('[data-action=check]');
-    if (check && question.heard) check.disabled = false;
-    return;
+    return playAudio(question.entry.id,() => {
+      question.heard = true;
+      const check = $('content').querySelector('[data-action=check]');
+      if (check) check.disabled = false;
+    });
   }
   if (action === 'letter-audio') {
-    alphabet.played = speak(alphabetQuestions[alphabet.index].audio);
+    return playAudio(alphabetQuestions[alphabet.index].audio,() => {
+      alphabet.played = true;
+      render();
+    });
   } else if (action === 'letter-option') {
     alphabet.answer = value;
     alphabet.feedback = value === alphabetQuestions[alphabet.index].answer ?
       t('Верно.','To‘g‘ri.') : t('Попробуй ещё.','Yana urinib ko‘r.');
   } else if (action === 'alphabet-prev' || action === 'alphabet-next') {
+    stopAudio();
     const next = alphabet.index + (action === 'alphabet-prev' ? -1 : 1);
     if (next === alphabetQuestions.length) return changeView('units');
     alphabet = {index:next,answer:'',feedback:'',played:false};
@@ -559,13 +565,14 @@ document.addEventListener('click', event => {
     if (deck.revealed.has(deck.index)) deck.revealed.delete(deck.index);
     else deck.revealed.add(deck.index);
   } else if (['next-card','prev-card','grade-hard','grade-known'].includes(action)) {
-    window.speechSynthesis?.cancel();
+    stopAudio();
     if (action.startsWith('grade-') && actionCard) setMark(actionCard.id,action.slice(6));
     deck.index = Math.max(0,Math.min(deck.queue.length,deck.index+(action==='prev-card'?-1:1)));
   } else if (action === 'start-practice' || action === 'retry-practice') {
+    stopAudio();
     startPractice(action === 'retry-practice');
   } else if (action === 'prev-question' || action === 'next-question') {
-    window.speechSynthesis?.cancel();
+    stopAudio();
     session.index = Math.max(0,Math.min(session.queue.length,session.index+(action==='prev-question'?-1:1)));
   } else if (question && ['pick-option','chip-add','chip-remove','insert','check','skip','hint','practice-hard'].includes(action)) {
     if (action === 'practice-hard') setMark(question.entry.id,'hard');
@@ -609,10 +616,12 @@ document.addEventListener('change', event => {
     kind = value;
     resetPools();
   } else if (id === 'mode') {
+    stopAudio();
     mode = value;
     practices.clear();
     storeSettings();
   } else if (id === 'size') {
+    stopAudio();
     size = Number(value);
     practices.clear();
     storeSettings();
@@ -656,12 +665,7 @@ window.addEventListener('pageshow', () => {
 });
 window.addEventListener('popstate',applyLocation);
 window.addEventListener('hashchange',applyLocation);
-refreshVoices();
-window.speechSynthesis?.addEventListener('voiceschanged',() => {
-  const available = voices.length > 0;
-  refreshVoices();
-  if (available !== (voices.length > 0) && document.activeElement?.tagName !== 'INPUT') render();
-});
+window.addEventListener('pagehide',stopAudio);
 applyLocation();
 render();
 if (!solo && 'serviceWorker' in navigator) navigator.serviceWorker.register('../sw.js').catch(() => {});
