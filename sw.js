@@ -1,11 +1,12 @@
 const BASE=new URL(self.registration.scope);
 const CACHE_PREFIX=`hanyuwed:${BASE.pathname}:`;
-const CACHE=CACHE_PREFIX+'v7';
+const CACHE=CACHE_PREFIX+'v8';
 const assetUrl=path=>new URL(path,BASE).href;
 const PAGES=new Map([
   ['./','./'],['index.html','./'],['chinese.html','chinese.html'],
   ['fr','fr/'],['fr/','fr/'],['fr/index.html','fr/'],
   ['ko','ko/'],['ko/','ko/'],['ko/index.html','ko/'],
+  ['ar','ar/'],['ar/','ar/'],['ar/index.html','ar/'],
 ].map(([path,canonical])=>[new URL(path,BASE).pathname,assetUrl(canonical)]));
 const ASSETS=[
   './','index.html','chinese.html','courses.css','courses.js',
@@ -13,6 +14,7 @@ const ASSETS=[
   'manifest.webmanifest','icon.svg','icon-192.png','icon-512.png','apple-touch-icon.png',
   'fr/','fr/index.html','fr/styles.css','fr/course-data.js','fr/grammar.js','fr/answers.js','fr/app.js?v=2',
   'ko/','ko/index.html','ko/styles.css','ko/data.js','ko/answers.js','ko/app.js',
+  'ar/','ar/index.html','ar/styles.css','ar/data.js','ar/answers.js','ar/app.js',
 ].map(assetUrl);
 const AUDIO=Array.from({length:282},(_,i)=>assetUrl(`audio/${i+1}.mp3`));
 self.addEventListener('install',event=>event.waitUntil((async()=>{
@@ -48,5 +50,11 @@ self.addEventListener('fetch',event=>{
   event.respondWith(fetch(request).then(response=>{
     if(response.ok&&response.type==='basic'&&!response.redirected&&response.status===200){const copy=response.clone();event.waitUntil(caches.open(CACHE).then(c=>c.put(request,copy)));}
     return response;
-  }).catch(()=>caches.open(CACHE).then(async c=>(await c.match(request))||(page&&(await c.match(page)))||Response.error())));
+  }).catch(()=>caches.open(CACHE).then(async cache=>{
+    if(page===assetUrl('ar/')&&url.pathname===new URL('ar',BASE).pathname){
+      const cached=await cache.match(page);
+      if(cached)return Response.redirect(page+url.search,302);
+    }
+    return (await cache.match(request))||(page&&(await cache.match(page)))||Response.error();
+  })));
 });
