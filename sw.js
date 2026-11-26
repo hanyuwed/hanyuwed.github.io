@@ -1,6 +1,6 @@
 const BASE=new URL(self.registration.scope);
 const CACHE_PREFIX=`hanyuwed:${BASE.pathname}:`;
-const CACHE=CACHE_PREFIX+'v10';
+const CACHE=CACHE_PREFIX+'v11';
 const assetUrl=path=>new URL(path,BASE).href;
 const PAGES=new Map([
   ['./','./'],['index.html','./'],['chinese.html','chinese.html'],
@@ -14,7 +14,7 @@ const ASSETS=[
   'manifest.webmanifest','icon.svg','icon-192.png','icon-512.png','apple-touch-icon.png',
   'fr/','fr/index.html','fr/styles.css','fr/course-data.js','fr/grammar.js','fr/answers.js','fr/app.js?v=2',
   'ko/','ko/index.html','ko/styles.css','ko/data.js','ko/answers.js','ko/app.js',
-  'ar/','ar/index.html','ar/styles.css','ar/data.js','ar/answers.js','ar/app.js','ar/speech-data.js',
+  'ar/','ar/index.html','ar/styles.css','ar/data.js','ar/answers.js','ar/app.js?v=2','ar/speech-data.js',
 ].map(assetUrl);
 const AUDIO=Array.from({length:282},(_,i)=>assetUrl(`audio/${i+1}.mp3`));
 self.addEventListener('install',event=>event.waitUntil((async()=>{
