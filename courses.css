@@ -3,3 +3,6 @@
 .course-list .course-link:hover { border-color: #829582; }
 .course-list .unit-title { font-size: 19px; }
 .course-list .french-symbol { font-family: Georgia, serif; }
+.course-feedback { padding: 24px 0 10px; color: var(--muted); }
+.course-feedback p { margin: 0 0 4px; font-size: 14px; letter-spacing: normal; }
+.course-feedback a { color: var(--green); font-size: 14px; text-decoration: underline; text-underline-offset: 3px; }
