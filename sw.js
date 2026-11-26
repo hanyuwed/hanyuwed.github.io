@@ -7,6 +7,7 @@ const PAGES=new Map([
   ['fr','fr/'],['fr/','fr/'],['fr/index.html','fr/'],
   ['ko','ko/'],['ko/','ko/'],['ko/index.html','ko/'],
   ['ar','ar/'],['ar/','ar/'],['ar/index.html','ar/'],
+  ['it','it/'],['it/','it/'],['it/index.html','it/'],
 ].map(([path,canonical])=>[new URL(path,BASE).pathname,assetUrl(canonical)]));
 const ASSETS=[
   './','index.html','chinese.html','courses.css','courses.js',
@@ -14,7 +15,8 @@ const ASSETS=[
   'manifest.webmanifest','icon.svg','icon-192.png','icon-512.png','apple-touch-icon.png',
   'fr/','fr/index.html','fr/styles.css','fr/course-data.js','fr/grammar.js','fr/answers.js','fr/app.js?v=2',
   'ko/','ko/index.html','ko/styles.css','ko/data.js','ko/answers.js','ko/app.js',
-  'ar/','ar/index.html','ar/styles.css','ar/data.js','ar/answers.js','ar/app.js?v=2','ar/speech-data.js',
+  'ar/','ar/index.html','ar/styles.css','ar/data.js','ar/answers.js','ar/app.js','ar/speech-data.js',
+  'it/','it/index.html','it/styles.css','it/course-data.js','it/grammar.js','it/answers.js','it/audio-data.js','it/app.js',
 ].map(assetUrl);
 const AUDIO=Array.from({length:282},(_,i)=>assetUrl(`audio/${i+1}.mp3`));
 self.addEventListener('install',event=>event.waitUntil((async()=>{
@@ -51,7 +53,7 @@ self.addEventListener('fetch',event=>{
     if(response.ok&&response.type==='basic'&&!response.redirected&&response.status===200){const copy=response.clone();event.waitUntil(caches.open(CACHE).then(c=>c.put(request,copy)));}
     return response;
   }).catch(()=>caches.open(CACHE).then(async cache=>{
-    if(page===assetUrl('ar/')&&url.pathname===new URL('ar',BASE).pathname){
+    if(page && ['ar','it'].some(course=>page===assetUrl(course+'/')&&url.pathname===new URL(course,BASE).pathname)){
       const cached=await cache.match(page);
       if(cached)return Response.redirect(page+url.search,302);
     }
