@@ -1,6 +1,6 @@
 const BASE=new URL(self.registration.scope);
 const CACHE_PREFIX=`hanyuwed:${BASE.pathname}:`;
-const CACHE=CACHE_PREFIX+'v12';
+const CACHE=CACHE_PREFIX+'v13';
 const assetUrl=path=>new URL(path,BASE).href;
 const PAGES=new Map([
   ['./','./'],['index.html','./'],['chinese.html','chinese.html'],
