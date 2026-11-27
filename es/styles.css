@@ -1,0 +1,32 @@
+.nav { flex-wrap: wrap; }
+.es-text { font-family: Georgia, serif; overflow-wrap: anywhere; }
+.flash > .es-text { font-size: clamp(1.9rem, 6vw, 3.15rem); }
+.tile-title.es-text { font-size: 1.11rem; }
+.forms { color: var(--muted); font-size: .95rem; }
+.flash .forms { margin: 2px 0 0; }
+.word .es-text { font-size: 1.24rem; }
+.word { grid-template-columns: minmax(0, 1fr) auto; align-items: start; }
+.word p { margin: 2px 0; }
+.word .actions { margin-top: 0; }
+.actions button { overflow-wrap: anywhere; }
+.listen-controls { display: flex; flex-wrap: wrap; gap: 8px; margin: 8px 0; }
+.lesson { padding: 16px 18px; margin: 12px 0; }
+.lesson h2 { margin: 0 0 8px; font-size: 1.35rem; }
+.lesson p { margin: 5px 0; }
+.lesson li { margin-bottom: 14px; }
+.lesson select,.bar select { border: 1px solid #899487; border-radius: 8px; background: var(--paper); color: var(--ink); font: inherit; min-height: 42px; max-width: 100%; padding: 4px 8px; }
+.lesson .bar { justify-content: flex-start; }
+.practice .prompt { margin-bottom: 14px; }
+.accents { display: flex; flex-wrap: wrap; gap: 6px; margin: 8px 0; }
+.accents button { min-width: 38px; padding: 4px 8px; }
+.summary { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 6px 20px; }
+.summary dd { font-weight: 700; margin: 0; }
+.audio-answer { margin-bottom: 12px; }
+@media (max-width: 400px) {
+  .word .actions { grid-template-columns: 1fr; }
+  .word .actions button { padding: 6px 8px; }
+}
+#download-audio { margin-top: 12px; display: flex; gap: 10px; align-items: center; flex-wrap: wrap; }
+.word-example { margin: 10px 0; }
+.word-example p { margin: 4px 0; }
+.listen-controls [aria-pressed="true"] { outline: 2px solid var(--accent, #a52a2a); outline-offset: -2px; }
