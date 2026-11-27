@@ -3,7 +3,18 @@
 .flash > .es-text { font-size: clamp(1.9rem, 6vw, 3.15rem); }
 .tile-title.es-text { font-size: 1.11rem; }
 .forms { color: var(--muted); font-size: .95rem; }
-.flash .forms { margin: 2px 0 0; }
+.card-top { display: flex; justify-content: space-between; gap: 12px; }
+.card-top span:last-child { white-space: nowrap; }
+.card-progress { height: 4px; }
+.study-card { position: relative; min-height: 300px; padding: 33px 18px 50px; }
+.study-card[aria-expanded="true"] { background: #fffdf7; }
+.study-card > span { max-width: 100%; overflow-wrap: anywhere; }
+.study-card .card-hint { position: absolute; bottom: 16px; color: var(--muted); }
+.under-card { margin: 8px 0; }
+.card-assess button { min-height: 50px; }
+.card-assess button:first-child { background: #eae8df; }
+.deck-nav { display: flex; justify-content: space-between; margin: 16px 0; }
+.deck-nav button { min-width: 44px; }
 .word .es-text { font-size: 1.24rem; }
 .word { grid-template-columns: minmax(0, 1fr) auto; align-items: start; }
 .word p { margin: 2px 0; }

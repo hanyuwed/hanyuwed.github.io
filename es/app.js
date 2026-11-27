@@ -32,22 +32,26 @@ function storageWarning() {
 
 let lang = readLanguage();
 const t = (ru,uz) => lang === 'uz' ? uz : ru;
-const wordById = new Map(ES_WORDS.map(word => [word.id,word]));
-const progress = new Map(ES_WORDS.map(word => [word.id,saved(keys.word(word.id),null)]));
+const vocabulary = ES_WORDS.flatMap(word => [word,...(word.aliases || []).map(form => {
+  const [ru,uz] = ES_FORM_TRANSLATIONS[form];
+  const bare = word.gender ? /^(?:el|la|los|las) (.+)$/.exec(form)?.[1] : undefined;
+  return {id:word.id + ':form:' + form,es:form,ru,uz,bare,sources:word.sources,formOf:word.id};
+})]);
+const wordById = new Map(vocabulary.map(word => [word.id,word]));
+const progress = new Map(vocabulary.map(word => [word.id,saved(keys.word(word.id),null)]));
 const units = saved(keys.units,[0]);
 const chosen = new Set(Array.isArray(units) ? units.filter(n => Number.isInteger(n) && ES_UNITS[n]) : [0]);
 const views = {
   topics: ['Темы','Bo‘limlar'],
   cards: ['Карточки','Kartochkalar'],
-  practice: ['Практика','Mashqlar'],
+  practice: ['Тест по юниту','Dars bo‘yicha test'],
   dictionary: ['Словарь','Lug‘at']
 };
 let view = 'topics';
 let deck = restoreDeck();
-let practiceUnit = [...chosen][0] ?? 0;
-let mode = 'grammar';
-let amount = 10;
 let session = restoreSession(saved(keys.session,null));
+let practiceUnit = ES_UNITS[session?.unit]?.id ?? [...chosen][0] ?? 0;
+let mode = session?.mode ?? 'from-es';
 let query = '';
 let dictUnit = 'all';
 let dictHard = false;
@@ -83,11 +87,15 @@ function go(destination) {
 }
 
 function selectedWords() {
-  return ES_WORDS.filter(word => word.sources.some(source => chosen.has(source.unit)));
+  return vocabulary.filter(word => word.sources.some(source => chosen.has(source.unit)));
+}
+
+function wordsForUnit(unit) {
+  return vocabulary.filter(word => word.sources.some(source => source.unit === unit));
 }
 
 function hardWords() {
-  return ES_WORDS.filter(word => progress.get(word.id) === 'hard');
+  return vocabulary.filter(word => progress.get(word.id) === 'hard');
 }
 
 function shuffled(items) {
@@ -156,7 +164,7 @@ audio.addEventListener('playing', () => {
   if (activeAudio) $('audio-status').textContent = t('Воспроизведение · испанский (Испания)','Ijro etilmoqda · ispan tili (Ispaniya)');
 });
 audio.addEventListener('ended', () => {
-  if (activeAudio) $('audio-status').textContent = t('Нажми «Слушать», чтобы повторить.','Takrorlash uchun «Tinglash»ni bosing.');
+  if (activeAudio) $('audio-status').textContent = '';
 });
 audio.addEventListener('error', () => {
   if (activeAudio) $('audio-status').textContent = t('Запись недоступна. Можно повторить загрузку.','Audio mavjud emas. Yana yuklab ko‘ring.');
@@ -164,9 +172,9 @@ audio.addEventListener('error', () => {
 
 function lessonAudio(unit) {
   const {rules,scene,model,drills} = ES_LESSONS[unit];
-  const words = ES_WORDS.filter(word => word.sources.some(source => source.unit === unit));
+  const words = wordsForUnit(unit);
   return [...new Set([
-    ...words.flatMap(word => [word.es,...(word.aliases || [])]),
+    ...words.map(word => word.es),
     ...rules.flatMap(rule => rule[4]), ...scene.map(line => line[0]), model[0],
     ...drills.map(drill => drill[4])
   ].map(audioUrl))];
@@ -249,16 +257,15 @@ function render() {
   content.innerHTML = ({topics:renderTopics,cards:renderCards,practice:renderPractice,dictionary:renderDictionary})[view]();
 }
 
-function unitOptions(current, all = false) {
-  const first = all ? '<option value="all">' + t('Все темы','Barcha bo‘limlar') + '</option>' : '';
-  const list = all ? ES_UNITS : ES_UNITS.filter(u => chosen.has(u.id));
-  return first + list.map(u => '<option value="' + u.id + '"' + (String(u.id) === String(current) ? ' selected' : '') +
-    '>' + esc((u.id + 1) + ' · ' + u.title) + '</option>').join('');
+function unitOptions(current, includeAll = false) {
+  const first = includeAll ? '<option value="all">' + t('Все юниты','Barcha darslar') + '</option>' : '';
+  return first + ES_UNITS.map(u => '<option value="' + u.id + '"' + (String(u.id) === String(current) ? ' selected' : '') +
+    '>' + esc((u.id + 1) + ' · ' + u[lang]) + '</option>').join('');
 }
 
 function renderTopics() {
   const list = ES_UNITS.map(unit => {
-    const words = ES_WORDS.filter(word => word.sources.some(source => source.unit === unit.id));
+    const words = wordsForUnit(unit.id);
     const known = words.filter(word => progress.get(word.id) === 'known').length;
     const count = words.filter(word => progress.get(word.id) === 'hard').length;
     const label = '<span class="tile-symbol" aria-hidden="true">' + (unit.id + 1) + '</span><span><span class="tile-title es-text" lang="es">' +
@@ -270,37 +277,37 @@ function renderTopics() {
   }).join('');
   const disabled = !chosen.size ? 'disabled' : '';
   return '<section><div class="tile-grid">' + list + '</div><div class="selection actions">' +
-    btn('Карточки','Kartochkalar','begin','all','primary',disabled) +
-    btn('Практика','Mashqlar','open-practice','','btn',disabled) + '</div></section>';
+    btn('Перемешать и повторять','Aralashtirib takrorlash','shuffle','','primary',disabled) +
+    btn('Тест по юниту','Dars bo‘yicha test','route','practice') + '</div></section>';
 }
 
 function restoreDeck() {
   const value = saved(keys.deck,null);
   if (!value || !Array.isArray(value.ids) || !Array.isArray(value.opened) || !Number.isInteger(value.index)) return null;
   const entries = value.ids.map(id => wordById.get(id)).filter(Boolean);
+  if (!value.hard && value.version !== 2 && value.index < entries.length) {
+    const ids = new Set(value.ids);
+    entries.push(...vocabulary.filter(word => ids.has(word.formOf) && !ids.has(word.id)));
+  }
   return {hard:value.hard === true,direction:value.direction === 'to-es' ? 'to-es' : 'from-es',
     entries,index:Math.max(0,Math.min(value.index,entries.length)),opened:new Set(value.opened)};
 }
 
 function saveDeck() {
-  write(keys.deck,deck ? {hard:deck.hard,direction:deck.direction,index:deck.index,
+  write(keys.deck,deck ? {version:2,hard:deck.hard,direction:deck.direction,index:deck.index,
     ids:deck.entries.map(word => word.id),opened:[...deck.opened]} : null);
 }
 
-function beginDeck(hard, direction = deck?.direction || 'from-es') {
-  deck = {hard,direction,entries:hard ? hardWords() : selectedWords(),index:0,opened:new Set()};
+function beginDeck(hard, direction = deck?.direction || 'from-es', shuffle = false) {
+  const entries = hard ? hardWords() : selectedWords();
+  deck = {hard,direction,entries:shuffle ? shuffled(entries) : entries,index:0,opened:new Set()};
   saveDeck();
 }
 
-function wordForms(word) {
-  const gender = word.gender ? '<p class="forms">' + t(
+function wordGender(word) {
+  return word.gender ? '<p class="forms">' + t(
     word.gender === 'f' ? 'Женский род' : 'Мужской род',
     word.gender === 'f' ? 'Muannas jins' : 'Muzakkar jins') + '</p>' : '';
-  const forms = word.aliases?.length ? '<p class="forms">' +
-    t('Формы и варианты · нажми, чтобы послушать','Shakllar va variantlar · tinglash uchun bosing') +
-    '</p><div class="listen-controls">' +
-    word.aliases.map(form => button(form,'audio',form,'btn','lang="es"')).join('') + '</div>' : '';
-  return gender + forms;
 }
 
 function wordExample(word) {
@@ -321,41 +328,42 @@ function wordExample(word) {
 function renderCards() {
   if (!deck) beginDeck(false);
   const word = deck.entries[deck.index];
-  const controls = '<div class="bar choices">' +
-    button('ES → ' + lang.toUpperCase(),'direction','from-es','', 'aria-pressed="' + (deck.direction === 'from-es') + '"') +
-    button(lang.toUpperCase() + ' → ES','direction','to-es','', 'aria-pressed="' + (deck.direction === 'to-es') + '"') +
-    button(t('Трудные','Qiyinlar') + ' · ' + hardWords().length,'begin',deck.hard ? 'all' : 'hard','', 'aria-pressed="' + deck.hard + '"') + '</div>';
+  const fromSpanish = deck.direction === 'from-es';
+  const target = lang.toUpperCase();
+  const controls = '<div class="bar">' + btn('Выбрать юниты','Darslarni tanlash','route','topics','quiet') +
+    button((fromSpanish ? 'ES → ' + target : target + ' → ES') + ' ⇄','direction',
+      fromSpanish ? 'to-es' : 'from-es','quiet') + '</div><div class="bar"><div class="choices">' +
+    btn('Все','Barchasi','begin','all','', 'aria-pressed="' + !deck.hard + '"') +
+    button(t('Трудные','Qiyinlar') + ' · ' + hardWords().length,'begin','hard','', 'aria-pressed="' + deck.hard + '"') +
+    '</div>' + btn('↝ Перемешать','↝ Aralashtirish','shuffle',deck.hard ? 'hard' : 'all','quiet') + '</div>';
   if (!word) {
     const message = deck.hard && !hardWords().length ?
       t('Нет трудных слов. Пометь нужные слова кнопкой «Ещё учу».','Tanlangan bo‘limlarda qiyin so‘zlar yo‘q. Keraklilarini «Hali o‘rganyapman» bilan belgilang.') :
       deck.entries.length ? t('Карточки пройдены.','Kartochkalar tugadi.') : t('Выбери хотя бы одну тему.','Kamida bitta bo‘limni tanlang.');
     return '<section>' + controls + '<div class="surface empty"><p>' + message + '</p><div class="actions">' +
       (deck.index > 0 ? btn('Назад','Oldingi','card-move','-1') : '') +
-      btn('Выбрать темы','Bo‘lim tanlash','route','topics') +
+      (deck.entries.length ? btn('Начать новый круг','Yangi davrni boshlash','shuffle',deck.hard ? 'hard' : 'all') : '') +
       btn('Повторить трудные','Qiyinlarini takrorlash','begin','hard','btn',hardWords().length ? '' : 'disabled') + '</div></div></section>';
   }
   const revealed = deck.opened.has(word.id);
-  const fromSpanish = deck.direction === 'from-es';
-  const main = fromSpanish ? es(word.es) : '<span class="meaning">' + esc(word[lang]) + '</span>';
-  const back = fromSpanish ? '<span class="meaning">' + esc(word[lang]) + '</span>' : es(word.es);
-  const state = progress.get(word.id);
-  return '<section>' + controls + '<p class="meta">' + (deck.index+1) + '/' + deck.entries.length +
-    (state === 'hard' ? ' · ' + t('Ещё учу','Hali o‘rganyapman') : state === 'known' ? ' · ' + t('Помню','Bilaman') : '') +
-    '</p><button type="button" class="surface flash" data-action="flip" aria-expanded="' + revealed + '">' + main +
-    (revealed ? back : '<small>' + t('Показать перевод','Tarjimani ko‘rsatish') + '</small>') + '</button>' +
-    (fromSpanish || revealed ? '<div class="listen-controls">' +
-      btn('Слушать слово','So‘zni tinglash','audio',word.es) +
-      btn('Слово медленно','So‘zni sekin tinglash','audio-slow',word.es) + '</div>' : '') +
-    (revealed ? wordForms(word) + wordExample(word) : '') +
-    '<div class="actions">' +
-    btn('Ещё учу','Hali o‘rganyapman','grade','hard','btn',revealed ? '' : 'disabled') +
-    btn('Помню','Bilaman','grade','known','primary',revealed ? '' : 'disabled') +
-    btn('Назад','Oldingi','card-move','-1','btn',deck.index ? '' : 'disabled') +
-    btn('Вперёд','Keyingi','card-move','1') + '</div></section>';
-}
-
-function selectPracticeUnit() {
-  if (!chosen.has(practiceUnit)) practiceUnit = [...chosen][0] ?? 0;
+  const translation = '<span class="meaning">' + esc(word[lang]) + '</span>';
+  const unit = ES_UNITS[(word.sources.find(source => chosen.has(source.unit)) || word.sources[0]).unit];
+  const position = deck.index + 1;
+  return '<section>' + controls + '<div class="card-top meta"><span>' + esc(unit[lang]) + '</span><span>' +
+    position + ' / ' + deck.entries.length + '</span></div><progress class="progress card-progress" aria-label="' +
+    t('Позиция в колоде','Kartochka o‘rni') + '" value="' + position + '" max="' + deck.entries.length + '"></progress>' +
+    '<button type="button" class="surface flash study-card" data-action="flip" aria-expanded="' + revealed + '">' +
+    (fromSpanish || revealed ? es(word.es) : translation) + (revealed ? translation : '') +
+    '<small class="card-hint">' + (revealed ? t('Скрыть ответ','Javobni yashirish') :
+      t('Нажми, чтобы проверить себя','Javobni ko‘rish uchun bosing')) + '</small></button>' +
+    (fromSpanish || revealed ? '<div class="under-card">' +
+      btn('♪ Произношение','♪ Talaffuz','audio',word.es,'quiet') + '</div>' : '') +
+    (revealed ? '<div class="actions card-assess">' +
+      btn('↺ Ещё учу','↺ Hali o‘rganyapman','grade','hard') +
+      btn('Помню ✓','Esimda ✓','grade','known','primary') + '</div>' : '') +
+    '<div class="deck-nav">' +
+    button('←','card-move','-1','btn','aria-label="' + t('Предыдущая карточка','Oldingi kartochka') + '" ' + (deck.index ? '' : 'disabled')) +
+    button('→','card-move','1','btn','aria-label="' + t('Следующая карточка','Keyingi kartochka') + '"') + '</div></section>';
 }
 
 function renderLesson(lesson) {
@@ -372,20 +380,22 @@ function renderLesson(lesson) {
 
 function renderPractice() {
   if (session) return session.done ? renderResults() : renderQuestion();
-  if (!chosen.size) return '<section>' + btn('Выбрать тему','Bo‘lim tanlash','route','topics') + '</section>';
-  selectPracticeUnit();
   const options = [
-    ['grammar','Грамматика','Grammatika'],['to-es',lang.toUpperCase()+' → ES',lang.toUpperCase()+' → ES'],
-    ['from-es','ES → '+lang.toUpperCase(),'ES → '+lang.toUpperCase()],['dictation','Диктант','Diktant'],
-    ['listen','Слушай и выбери','Tinglang va tanlang']
+    ['from-es','Перевод с испанского','Ispanchadan tarjima'],
+    ['to-es','Перевод на испанский','Ispanchaga tarjima'],
+    ['dictation','Диктант','Diktant'],['listen','Слушай и выбери','Tinglang va tanlang'],
+    ['grammar','Грамматика','Grammatika']
   ];
   const modes = options.map(([id,ru,uz]) => '<option value="' + id + '"' + (mode===id ? ' selected' : '') + '>' + t(ru,uz) + '</option>').join('');
-  return '<section><div class="surface lesson"><div class="bar controls"><label>' + t('Тема','Bo‘lim') +
+  const lesson = ES_LESSONS[practiceUnit];
+  const count = mode === 'grammar' ? lesson.drills.length : testWords(practiceUnit).length;
+  return '<section><div class="surface lesson"><div class="bar controls"><label>' + t('Юнит','Dars') +
     '<select id="practice-unit">' + unitOptions(practiceUnit) + '</select></label><label>' + t('Режим','Rejim') +
     '<select id="mode">' + modes + '</select></label>' +
-    (mode === 'grammar' ? '' : '<label>' + t('Сколько слов','So‘zlar soni') + '<select id="amount">' +
-      [6,10,20].map(n => '<option'+(n===amount?' selected':'')+'>'+n+'</option>').join('') + '</select></label>') +
-    '</div>' + btn('Начать','Boshlash','start','','primary') + '<div id="download-audio" data-unit="' + practiceUnit + '">' + downloadControls(practiceUnit) + '</div></div>' + renderLesson(ES_LESSONS[practiceUnit]) + '</section>';
+    '</div><p class="meta" role="status">' + t(`Вопросов в тесте: ${count}`, `Savollar soni: ${count}`) + '</p>' +
+    btn('Начать тест','Testni boshlash','start','','primary') + '</div><details class="surface lesson"><summary>' +
+    t('Материалы юнита и аудио','Dars materiallari va audio') + '</summary><div id="download-audio" data-unit="' +
+    practiceUnit + '">' + downloadControls(practiceUnit) + '</div>' + renderLesson(lesson) + '</details></section>';
 }
 
 function drillQuestions(unit) {
@@ -396,41 +406,45 @@ function drillQuestions(unit) {
   }));
 }
 
+function testWords(unit) {
+  return [...new Map(wordsForUnit(unit).map(word => [word.es,word])).values()];
+}
+
 function wordQuestions(unit, type) {
-  const lesson = ES_LESSONS[unit];
-  const pool = ES_WORDS.filter(word => word.sources.some(source => source.unit === unit));
+  const pool = testWords(unit);
+  const questions = shuffled(pool);
   if (type === 'dictation') {
-    const phrases = [...new Set([...lesson.scene.map(line => line[0]),...lesson.rules.flatMap(rule => rule[4]),...shuffled(pool.flatMap(word => [word.es,...(word.aliases||[])]))])];
-    return phrases.slice(0,amount).map(text => ({prompt:'dictation',audio:text,model:text,accepted:[text],language:'es'}));
+    return questions.map(word => ({prompt:'dictation',audio:word.es,model:word.es,accepted:[word.es],language:'es'}));
   }
   if (type === 'listen') {
-    return shuffled(pool).slice(0,amount).map(word => {
-      const alternatives = shuffled([...new Set(pool.filter(other =>
-        spanishSearch(other.es) !== spanishSearch(word.es) && other.ru !== word.ru && other.uz !== word.uz
-      ).map(other => other.es))]).slice(0,2);
+    return questions.map(word => {
+      const alternatives = shuffled(pool.filter(other =>
+        spanishSearch(other.es) !== spanishSearch(word.es)
+      )).slice(0,2).map(other => other.es);
       return {prompt:'listen',audio:word.es,choices:shuffled([word.es,...alternatives]),accepted:[word.es],language:'es'};
     });
   }
-  return shuffled(pool).slice(0,amount).map(word =>
+  return questions.map(word =>
     ({prompt:type,wordId:word.id,language:type === 'to-es'?'es':lang,accepted:[word.es]}));
 }
 
 function questionForLocale(question) {
   const word = wordById.get(question.wordId);
   if (!word) return question;
+  const pool = ES_UNITS[session?.unit] ? wordsForUnit(session.unit) : vocabulary;
   if (question.prompt === 'from-es') {
-    const translations = ES_WORDS.filter(other => other.es === word.es).map(other => other[lang]);
+    const translations = pool.filter(other => other.es === word.es).map(other => other[lang]);
     return {...question,language:lang,accepted:[...new Set(translations.flatMap(text => text.split(' / ')))],model:word.es};
   }
   const firstMeaning = word[lang].split(' / ')[0];
-  const equivalent = ES_WORDS.filter(other => other[lang].split(' / ').includes(firstMeaning) &&
+  const equivalent = pool.filter(other => other[lang].split(' / ').includes(firstMeaning) &&
     (Boolean(other.bare) === Boolean(word.bare)));
   return {...question,article:Boolean(word.bare),accepted:[...new Set(equivalent.flatMap(other => [other.es,...(other.bare ? [other.bare] : [])]))],model:word.es};
 }
 
 function start(questions) {
   if (!questions.length) return;
-  session = {index:0,done:false,questions,replies:[]};
+  session = {index:0,done:false,unit:practiceUnit,mode,questions,replies:[]};
   saveSession();
   render();
   $('answer')?.focus();
@@ -486,7 +500,9 @@ function renderQuestion() {
   const choices = q.choices?.map(choice => button(choice,'choose',choice,'btn','lang="es" aria-pressed="' + (choice === a.text) + '"')).join('') || '';
   const tokens = q.tokens?.map((token,index) => button(token,'token',index,'btn','lang="es" ' + ((a.tokens || []).includes(index) ? 'disabled' : ''))).join('') || '';
   const tone = a.result === 'correct' ? 'good' : a.result === 'shown' ? 'shown' : 'bad';
-  return '<section class="surface practice"><p class="meta">' + (session.index+1) + ' / ' + session.questions.length +
+  const unit = ES_UNITS[session.unit];
+  return '<section class="surface practice"><p class="meta">' + (unit ? esc(unit[lang]) + ' · ' : '') +
+    (session.index+1) + ' / ' + session.questions.length +
     '</p><progress class="progress" value="' +(session.index+1)+ '" max="' + session.questions.length+'"></progress>' +
     '<label for="answer">' + esc(questionLabel(q)) + '</label>' +
     (clue ? '<div class="prompt">' + clue + '</div>' : '') +
@@ -502,7 +518,7 @@ function renderQuestion() {
     btn('Показать образец','Namunani ko‘rsatish','answer') +
     btn('Назад','Oldingi','question-move','-1','btn',session.index ? '' : 'disabled') +
     button(last ? t('Результат','Natija') : t('Вперёд','Keyingi'),'question-move','1') + '</div>' +
-    btn('Закрыть практику','Mashqni yopish','practice-clear','','quiet') + '</section>';
+    btn('Выбрать юнит','Darsni tanlash','practice-clear','','quiet') + '</section>';
 }
 
 function resultAt(index) {
@@ -521,7 +537,9 @@ function renderResults() {
     if (stats[index] === 'first') return '';
     const q = questionForLocale(entry);
     const response = session.replies[index]?.[entry.prompt === 'from-es' ? lang : 'es'];
-    return '<li><p>' + esc(questionLabel(q)) + '</p><p class="meta">' + esc(response?.text || t('Пропущено','O‘tkazildi')) +
+    const word = wordById.get(entry.wordId);
+    const prompt = word ? (entry.prompt === 'from-es' ? word.es : word[lang].split(' / ')[0]) : q.frame || questionLabel(q);
+    return '<li><p>' + esc(prompt) + '</p><p class="meta">' + esc(response?.text || t('Пропущено','O‘tkazildi')) +
       '</p><p>' + esc(q.accepted[0]) + '</p>' + (q.hint?.[lang] ? '<p>' + esc(q.hint[lang]) + '</p>' : '') + '</li>';
   }).join('');
   const totals = Object.entries(labels).map(([key,label]) => '<dt>'+t(...label)+'</dt><dd>' +
@@ -531,7 +549,7 @@ function renderResults() {
       stats.every(s=>s==='first')?'disabled':'') +
     btn('Повторить трудные','Qiyinlarini takrorlash','begin','hard','btn',hardWords().length?'':'disabled') +
     btn('К последнему вопросу','Oxirgi savolga','question-move','-1') +
-    btn('К настройкам','Sozlamalarga','practice-clear') + '</div></section>';
+    btn('Выбрать юнит','Darsni tanlash','practice-clear') + '</div></section>';
 }
 
 function verify() {
@@ -564,22 +582,22 @@ function renderDictionary() {
 
 function dictionaryRows() {
   const find = spanishSearch(query).replaceAll('ё','е');
-  const rows = ES_WORDS.filter(word => {
+  const rows = vocabulary.filter(word => {
     if ((dictHard && progress.get(word.id) !== 'hard') ||
         (dictUnit !== 'all' && !word.sources.some(source => source.unit === Number(dictUnit)))) return false;
-    return [word.es,word.ru,word.uz,word.bare,...(word.aliases || [])].some(
+    return [word.es,word.ru,word.uz,word.bare].some(
       text => text && spanishSearch(text).replaceAll('ё','е').includes(find));
   });
   if (!rows.length) return '<p>' + t('Слова не найдены.','So‘z topilmadi.') + '</p>' + btn('Сбросить фильтры','Filtrlarni tozalash','dict-reset');
   const exact = spanishSpelling(query);
-  const matchScore = word => [word.es,word.bare,...(word.aliases || [])].some(text => text && spanishSpelling(text) === exact);
+  const matchScore = word => [word.es,word.bare].some(text => text && spanishSpelling(text) === exact);
   if (find) rows.sort((a,b) => Number(matchScore(b)) - Number(matchScore(a)));
   return '<p class="meta">' + t('Найдено · ','Topildi · ') + rows.length + '</p>' +
     rows.slice(0,dictLimit).map(word => {
       const sources = word.sources.map(s => (s.unit + 1) + ' · ' + (s.page === 'PDF' ? 'PDF' : t('Фото ','Rasm ') + s.page)).join(' / ');
       const hard = progress.get(word.id) === 'hard';
       return '<article class="word"><div><strong>' + es(word.es) + '</strong><p>' + esc(word[lang]) + '</p>' +
-        wordForms(word) + wordExample(word) + '<p class="meta">' + esc(sources) + '</p></div><div class="actions">' +
+        wordGender(word) + wordExample(word) + '<p class="meta">' + esc(sources) + '</p></div><div class="actions">' +
         btn('▶ Слушать','▶ Tinglash','audio',word.es) +
         button(hard ? t('Ещё учу ✓','Hali o‘rganyapman ✓') : t('В трудные','Qiyinlarga'),
           'word-hard',word.id,'btn','aria-pressed="' + hard + '"') + '</div></article>';
@@ -625,7 +643,6 @@ document.addEventListener('click',event => {
     return;
   }
   if (action === 'route') { go(value); return; }
-  if (action === 'open-practice') { go('practice'); return; }
   if (action === 'unit') {
     const unit = Number(value);
     if (chosen.has(unit)) chosen.delete(unit);
@@ -637,8 +654,9 @@ document.addEventListener('click',event => {
     content.querySelector('[data-action="unit"][data-value="' + unit + '"]')?.focus();
     return;
   }
-  if (action === 'begin' || action === 'direction') {
-    beginDeck(action === 'begin' ? value === 'hard' : deck.hard,action === 'direction' ? value : undefined);
+  if (action === 'begin' || action === 'direction' || action === 'shuffle') {
+    beginDeck(action === 'direction' ? deck.hard : value === 'hard',
+      action === 'direction' ? value : undefined,action === 'shuffle');
     go('cards');
     return;
   }
@@ -650,6 +668,7 @@ document.addEventListener('click',event => {
   if (action === 'card-move') {
     stopAudio();
     deck.index = Math.max(0,Math.min(deck.entries.length,deck.index + Number(value)));
+    deck.opened.delete(deck.entries[deck.index]?.id);
   }
   if (action === 'grade') {
     const word = deck.entries[deck.index];
@@ -657,6 +676,7 @@ document.addEventListener('click',event => {
     stopAudio();
     if (deck.hard && value === 'known') deck.entries.splice(deck.index,1);
     else deck.index++;
+    deck.opened.delete(deck.entries[deck.index]?.id);
   }
   if (action === 'start') {
     start(mode === 'grammar' ? drillQuestions(practiceUnit) : wordQuestions(practiceUnit,mode));
@@ -730,9 +750,12 @@ content.addEventListener('input',event => {
 content.addEventListener('change',event => {
   const {id,value} = event.target;
   if (id === 'dict-unit') { dictUnit = value; dictLimit = 35; updateDictionary(); }
-  if (id === 'practice-unit') { practiceUnit = Number(value); render(); }
-  if (id === 'mode') { mode = value; render(); }
-  if (id === 'amount') amount = Number(value);
+  if (id === 'practice-unit' || id === 'mode') {
+    if (id === 'practice-unit') practiceUnit = Number(value);
+    else mode = value;
+    render();
+    $(id)?.focus();
+  }
 });
 
 content.addEventListener('keydown',event => {
