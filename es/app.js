@@ -296,7 +296,9 @@ function wordForms(word) {
   const gender = word.gender ? '<p class="forms">' + t(
     word.gender === 'f' ? 'Женский род' : 'Мужской род',
     word.gender === 'f' ? 'Muannas jins' : 'Muzakkar jins') + '</p>' : '';
-  const forms = word.aliases?.length ? '<div class="listen-controls">' +
+  const forms = word.aliases?.length ? '<p class="forms">' +
+    t('Формы и варианты · нажми, чтобы послушать','Shakllar va variantlar · tinglash uchun bosing') +
+    '</p><div class="listen-controls">' +
     word.aliases.map(form => button(form,'audio',form,'btn','lang="es"')).join('') + '</div>' : '';
   return gender + forms;
 }
@@ -312,7 +314,8 @@ function wordExample(word) {
   if (!example) return '';
   const [text,ru,uz] = example;
   return '<div class="word-example"><p>' + es(text) + '</p><p class="meta">' + esc(t(ru,uz)) +
-    '</p><div class="listen-controls">' + player(text) + '</div></div>';
+    '</p><div class="listen-controls">' +
+    btn('Слушать пример','Misolni tinglash','audio',text) + '</div></div>';
 }
 
 function renderCards() {
@@ -340,8 +343,10 @@ function renderCards() {
     (state === 'hard' ? ' · ' + t('Ещё учу','Hali o‘rganyapman') : state === 'known' ? ' · ' + t('Помню','Bilaman') : '') +
     '</p><button type="button" class="surface flash" data-action="flip" aria-expanded="' + revealed + '">' + main +
     (revealed ? back : '<small>' + t('Показать перевод','Tarjimani ko‘rsatish') + '</small>') + '</button>' +
+    (fromSpanish || revealed ? '<div class="listen-controls">' +
+      btn('Слушать слово','So‘zni tinglash','audio',word.es) +
+      btn('Слово медленно','So‘zni sekin tinglash','audio-slow',word.es) + '</div>' : '') +
     (revealed ? wordForms(word) + wordExample(word) : '') +
-    (fromSpanish || revealed ? '<div class="listen-controls">' + player(word.es,true) + '</div>' : '') +
     '<div class="actions">' +
     btn('Ещё учу','Hali o‘rganyapman','grade','hard','btn',revealed ? '' : 'disabled') +
     btn('Помню','Bilaman','grade','known','primary',revealed ? '' : 'disabled') +
