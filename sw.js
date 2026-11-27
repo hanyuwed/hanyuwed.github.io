@@ -1,6 +1,6 @@
 const BASE=new URL(self.registration.scope);
 const CACHE_PREFIX=`hanyuwed:${BASE.pathname}:`;
-const CACHE=CACHE_PREFIX+'v11';
+const CACHE=CACHE_PREFIX+'v12';
 const assetUrl=path=>new URL(path,BASE).href;
 const PAGES=new Map([
   ['./','./'],['index.html','./'],['chinese.html','chinese.html'],
@@ -8,6 +8,7 @@ const PAGES=new Map([
   ['ko','ko/'],['ko/','ko/'],['ko/index.html','ko/'],
   ['ar','ar/'],['ar/','ar/'],['ar/index.html','ar/'],
   ['it','it/'],['it/','it/'],['it/index.html','it/'],
+  ['es','es/'],['es/','es/'],['es/index.html','es/'],
 ].map(([path,canonical])=>[new URL(path,BASE).pathname,assetUrl(canonical)]));
 const ASSETS=[
   './','index.html','chinese.html','courses.css','courses.js',
@@ -17,6 +18,7 @@ const ASSETS=[
   'ko/','ko/index.html','ko/styles.css','ko/data.js','ko/answers.js','ko/app.js',
   'ar/','ar/index.html','ar/styles.css','ar/data.js','ar/answers.js','ar/app.js','ar/speech-data.js',
   'it/','it/index.html','it/styles.css','it/course-data.js','it/grammar.js','it/answers.js','it/audio-data.js','it/app.js',
+  'es/','es/index.html','es/styles.css','es/course-data.js','es/grammar.js','es/answers.js','es/audio-index.js','es/app.js',
 ].map(assetUrl);
 const AUDIO=Array.from({length:282},(_,i)=>assetUrl(`audio/${i+1}.mp3`));
 self.addEventListener('install',event=>event.waitUntil((async()=>{
@@ -27,8 +29,8 @@ self.addEventListener('install',event=>event.waitUntil((async()=>{
   await self.skipWaiting();
 })()));
 self.addEventListener('activate',event=>event.waitUntil(caches.keys().then(keys=>Promise.all(keys.filter(k=>k.startsWith(CACHE_PREFIX)&&k!==CACHE).map(k=>caches.delete(k)))).then(()=>self.clients.claim())));
-async function audioResponse(request,path){
-  const cache=await caches.open(CACHE);
+async function audioResponse(request,path,cacheName=CACHE){
+  const cache=await caches.open(cacheName);
   const cached=await cache.match(path);
   if(!cached)return fetch(request);
   const range=request.headers.get('range');
@@ -47,13 +49,17 @@ self.addEventListener('fetch',event=>{
   const request=event.request,url=new URL(request.url);
   if(request.method!=='GET'||url.origin!==BASE.origin||!url.pathname.startsWith(BASE.pathname))return;
   if(AUDIO.includes(url.href)){event.respondWith(audioResponse(request,url.href));return;}
+  const relativePath=url.pathname.slice(BASE.pathname.length);
+  if(/^es\/audio\/[a-f0-9]{20}\.mp3$/.test(relativePath)){
+    event.respondWith(audioResponse(request,url.href,'hanyuwed-es-audio:'+BASE.pathname));return;
+  }
   const page=request.mode==='navigate'?PAGES.get(url.pathname):undefined;
   if(!page&&!ASSETS.includes(url.href))return;
   event.respondWith(fetch(request).then(response=>{
     if(response.ok&&response.type==='basic'&&!response.redirected&&response.status===200){const copy=response.clone();event.waitUntil(caches.open(CACHE).then(c=>c.put(request,copy)));}
     return response;
   }).catch(()=>caches.open(CACHE).then(async cache=>{
-    if(page && ['ar','it'].some(course=>page===assetUrl(course+'/')&&url.pathname===new URL(course,BASE).pathname)){
+    if(page && ['ar','it','es'].some(course=>page===assetUrl(course+'/')&&url.pathname===new URL(course,BASE).pathname)){
       const cached=await cache.match(page);
       if(cached)return Response.redirect(page+url.search,302);
     }
