@@ -60,6 +60,9 @@ let search = '';
 let activeAudio = null;
 let alphabet = { answer:'', index:0, feedback:'', played:false };
 let audioNote = '';
+const audioUrls = Object.values(recordings).map(path => new URL(path, import.meta.url).href);
+const audioCache = 'hanyuwed-media:' + new URL('../', import.meta.url).pathname;
+const audioDownload = { count:0, running:false, error:false, checked:false };
 
 const markNames = {
   'َ':['фатха','fatha'], 'ِ':['касра','kasra'], 'ُ':['дамма','damma'],
@@ -79,8 +82,14 @@ function storeSettings() {
   save(settingsKey, JSON.stringify({ units:[...selected], kind, decorated, reverse, mode, size }));
 }
 function setMark(id, state) {
-  marks.set(id, state);
-  save(markKey(id), state);
+  if (state === null) {
+    marks.delete(id);
+    try { localStorage.removeItem(markKey(id)); }
+    catch { memoryOnly = true; }
+  } else {
+    marks.set(id, state);
+    save(markKey(id), state);
+  }
 }
 
 function escape(text) {
@@ -124,6 +133,78 @@ function empty(note, action, label) {
   return '<div class="surface empty"><p>' + escape(note) + '</p>' + button(label, action, {primary:true}) + '</div>';
 }
 
+function downloadControls() {
+  if (solo || !('caches' in window) || !('serviceWorker' in navigator)) return '';
+  const complete = audioDownload.count === audioUrls.length;
+  const label = audioDownload.running ? t('Загружается…','Yuklanmoqda…') :
+    complete ? t('Аудио загружено','Audio yuklab olindi') :
+    audioDownload.error ? t('Продолжить загрузку аудио','Audioni yuklashni davom ettirish') :
+    t('Скачать аудио для работы без сети','Oflayn foydalanish uchun audioni yuklash');
+  const detail = !audioDownload.checked ? t('Проверяем записи…','Audiolar tekshirilmoqda…') :
+    t('Загружено записей: ','Yuklangan audiolar: ') + audioDownload.count + ' / ' + audioUrls.length;
+  const error = audioDownload.error ? t(' Загрузка прервалась. Нажми кнопку, чтобы продолжить.',
+    ' Yuklash to‘xtadi. Davom etish uchun tugmani bosing.') : '';
+  return button(label,'download-audio',{disabled:audioDownload.running || complete || !audioDownload.checked}) +
+    '<p class="meta" role="status">' + detail + error + '</p>';
+}
+
+function refreshAudioDownload() {
+  const panel = $('audio-download');
+  if (panel) panel.innerHTML = downloadControls();
+}
+
+async function checkAudioDownload() {
+  if (solo || !('caches' in window) || !('serviceWorker' in navigator)) return;
+  try {
+    const cache = await caches.open(audioCache);
+    const cached = new Set((await cache.keys()).map(request => request.url));
+    audioDownload.count = audioUrls.filter(url => cached.has(url)).length;
+  } catch {
+    audioDownload.error = true;
+  } finally {
+    audioDownload.checked = true;
+    refreshAudioDownload();
+  }
+}
+
+async function downloadAudio() {
+  if (audioDownload.running) return;
+  audioDownload.running = true;
+  audioDownload.error = false;
+  refreshAudioDownload();
+  try {
+    await navigator.serviceWorker.register('../sw.js');
+    await new Promise((resolve,reject) => {
+      const timer = setTimeout(() => reject(new Error('Offline support unavailable')),45000);
+      navigator.serviceWorker.ready.then(registration => {
+        clearTimeout(timer);
+        resolve(registration);
+      },error => {
+        clearTimeout(timer);
+        reject(error);
+      });
+    });
+    const cache = await caches.open(audioCache);
+    for (let index = 0; index < audioUrls.length; index += 4) {
+      const results = await Promise.allSettled(audioUrls.slice(index,index + 4).map(async url => {
+        if (await cache.match(url)) return;
+        const response = await fetch(url);
+        if (!response.ok || !response.headers.get('Content-Type')?.startsWith('audio/')) throw new Error('Audio unavailable');
+        await cache.put(url,response);
+      }));
+      const cached = new Set((await cache.keys()).map(request => request.url));
+      audioDownload.count = audioUrls.filter(url => cached.has(url)).length;
+      refreshAudioDownload();
+      if (results.some(result => result.status === 'rejected')) throw new Error('Audio download interrupted');
+    }
+  } catch {
+    audioDownload.error = true;
+  } finally {
+    audioDownload.running = false;
+    refreshAudioDownload();
+  }
+}
+
 function renderUnits() {
   const tiles = units.map(([ar, ru, uz], index) => {
     const id = index + 1;
@@ -137,7 +218,8 @@ function renderUnits() {
   return '<p class="section-note">' + t('Если арабское письмо пока незнакомо, начни с букв. Уроки можно выбрать в любом порядке.',
     'Arab yozuvi bilan hali tanish bo‘lmasang, harflardan boshla. Darslarni istalgan tartibda tanlash mumkin.') +
     '</p><div class="wrap below">' + button(t('Начать с букв','Harflardan boshlash'), 'open-alphabet') +
-    button(t('Перейти к урокам','Darslarga o‘tish'), 'focus-units') + '</div><div class="bar">' +
+    button(t('Перейти к урокам','Darslarga o‘tish'), 'focus-units') + '</div>' +
+    '<div id="audio-download" class="surface lesson-box">' + downloadControls() + '</div><div class="bar">' +
     button(t('Выбрать все','Hammasini tanlash'),'all-units') +
     button(t('Снять выбор','Tanlovni bekor qilish'),'clear-units') + '</div><div class="controls">' + poolTypes() +
     '</div><div class="tile-grid">' + tiles + '</div><div class="selection"><p class="meta" role="status">' +
@@ -157,8 +239,13 @@ function renderAlphabet() {
     ['reading-letters','ب ت ث'], ['reading-door','بَاب'],
     ['reading-vowels','بَ بِ بُ · بَا بِي بُو'], ['reading-sun-moon','الشَّمْس وَالْقَمَر']
   ];
+  const letterForms = [
+    [t('Отдельно','Alohida'),'ب'], [t('В начале','Boshida'),'بـ'],
+    [t('В середине','O‘rtasida'),'ـبـ'], [t('В конце','Oxirida'),'ـب']
+  ].map(([label,form]) => '<span>' + escape(label) + ' ' + arabic(form) + '</span>').join(' · ');
   const notes = lines.map(([title,note,samples],index) => '<div class="surface lesson-box"><h2>' + escape(title) +
     '</h2><p>' + escape(note) + '</p><div dir="rtl">' + arabic(samples) + '</div>' +
+    (index === 1 ? '<p>' + letterForms + '</p>' : '') +
     button(t('Прослушать','Tinglash') + ' · ' + arabic(examples[index][1]),'play',
       {value:examples[index][0],raw:true}) + '</div>').join('');
   const choices = question.options.map(option => button(arabic(option),'letter-option',{
@@ -215,11 +302,21 @@ function renderCards() {
 }
 
 function selectMark(entry) {
-  const letters = graphemes(entry.ar).filter(part => /\p{Script=Arabic}/u.test(part[0]));
-  const pos = letters.findIndex(part => Object.keys(markNames).some(mark => part.includes(mark)));
-  if (pos < 0) return null;
-  const sign = Object.keys(markNames).find(mark => letters[pos].includes(mark));
-  return { pos, sign, letter:letters[pos][0] };
+  const parts = graphemes(entry.ar);
+  let position = 0;
+  const candidates = [];
+  parts.forEach((part, index) => {
+    if (!/\p{Script=Arabic}/u.test(part[0])) return;
+    position++;
+    if (!parts[index + 1] || !/\p{Script=Arabic}/u.test(parts[index + 1][0])) return;
+    for (const sign of ['َ', 'ِ', 'ُ']) {
+      if (part.includes(sign)) candidates.push({ index, pos:position, sign, letter:part[0] });
+    }
+  });
+  if (!candidates.length) return null;
+  const selected = candidates[Math.floor(Math.random() * candidates.length)];
+  parts[selected.index] = parts[selected.index].replace(selected.sign, '');
+  return { ...selected, prompt:parts.join('') };
 }
 function chipSet(words) {
   return shuffle(words.map((text, id) => ({text,id})));
@@ -246,7 +343,7 @@ function makeQuestion(entry, pool) {
 function eligible(entry) {
   if (mode === 'tokens') return entry.ar.split(' ').length > 1 && entry.kind === 'phrase';
   if (mode === 'letters') return !bareArabic(entry.ar).includes(' ');
-  if (mode === 'marks') return Boolean(selectMark(entry));
+  if (mode === 'marks') return Boolean(recordings[entry.id]) && Boolean(selectMark(entry));
   return true;
 }
 function startPractice(repeat = false) {
@@ -289,17 +386,16 @@ function renderPractice() {
   const entry = current.entry;
   let prompt = isArabic ? escape(translation(entry)) : arabic(shown(entry),'main-text');
   if (mode === 'marks') {
-    const plain = arabic(bareArabic(entry.ar), 'main-text');
-    prompt = plain + '<div class="meta">' +
-      t('Выбери знак для буквы №','Belgi qo‘yiladigan harf №') + (current.target.pos + 1) + ' · ' +
-      arabic(current.target.letter) + ' · ' + t(...markNames[current.target.sign]) + '</div>';
+    prompt = arabic(current.target.prompt, 'main-text') + '<div class="meta">' +
+      t('Сначала нажми «Прослушать», затем выбери пропущенную краткую гласную для буквы №', 'Avval «Tinglash»ni bos, so‘ng harf uchun tushirilgan qisqa unlini tanla №') +
+      current.target.pos + ' · ' + arabic(current.target.letter) + ' · ' + escape(translation(entry)) + '</div>';
   }
   if (['choice','meaning'].includes(mode) && !decorated &&
       entries.some(other => other.id !== entry.id && bareArabic(other.ar) === bareArabic(entry.ar) && other.ar !== entry.ar)) {
     prompt = arabic(entry.ar,'main-text');
   }
   if (mode === 'dictation') {
-    prompt = t('Прослушай и запиши по-арабски','Tingla va arabcha yoz');
+    prompt = t('Прослушай и запиши по-арабски. Огласовки можно не вводить.', 'Tingla va arabcha yoz. Harakatlarni yozish shart emas.');
   }
   const correct = current.result === 'correct';
   const revealed = current.result !== null;
@@ -314,8 +410,8 @@ function renderPractice() {
   };
   let input;
   if (mode === 'choice' || mode === 'marks') {
-    const choices = mode === 'choice' ? current.options : Object.keys(markNames);
-    input = '<div class="options">' + choices.map(value => button(mode === 'marks' ? arabic('ـ' + value) : value,
+    const choices = mode === 'choice' ? current.options : ['َ', 'ِ', 'ُ'];
+    input = '<div class="options">' + choices.map(value => button(mode === 'marks' ? arabic('ـ' + value) + ' ' + escape(t(...markNames[value])) : value,
       'pick-option',{value,raw:mode === 'marks',disabled:revealed,pressed:current.draft===value})).join('') + '</div>';
   } else if (mode === 'tokens' || mode === 'letters') {
     function partButtons(parts, action) {
@@ -328,17 +424,18 @@ function renderPractice() {
   } else {
     input = '<label for="typed-answer">' + t('Твой ответ','Javobing') + '</label><input spellcheck="false" autocomplete="off" autocapitalize="off" id="typed-answer" class="answer ' +
       (isArabic ? 'ar" lang="ar" dir="rtl"' : '"') + ' value="' + escape(current.draft) + '"' + (revealed ? ' readonly' : '') + '>';
+    if (isArabic && !revealed) input += '<p class="meta">' + t('Для ввода букв включи арабскую раскладку на устройстве.', 'Harflarni yozish uchun qurilmada arabcha klaviaturani yoqing.') + '</p>';
     if (isArabic && !revealed) input += '<div class="wrap letters below" dir="rtl" aria-label="' + t('Огласовки','Harakatlar') +
       '">' + Object.keys(markNames).map(value => button(arabic('ـ' + value),'insert',{raw:true,value})).join('') + '</div>';
   }
   const solution = isArabic ? arabic(entry.ar) : escape(translation(entry));
   return options + progress(session.index+1,session.queue.length) +
     '<div class="surface practice"><div class="prompt" id="question-prompt">' + prompt + '</div>' +
-    (mode === 'dictation' || revealed || ['choice','meaning'].includes(mode) ?
-      '<div class="wrap below">' + soundButton(entry, mode === 'dictation') + '</div>' : '') + input +
+    (mode === 'dictation' || revealed || ['choice','meaning','marks'].includes(mode) ?
+      '<div class="wrap below">' + soundButton(entry, mode === 'dictation' || mode === 'marks') + '</div>' : '') + input +
     '<p id="feedback" role="status" data-tone="' + (correct ? 'good' : 'bad') + '">' +
     (revealed ? explanations[checked] + ' ' + solution : '') + '</p><div class="wrap option-gap">' +
-    (revealed ? '' : button(t('Проверить','Tekshirish'),'check',{primary:true,disabled:mode === 'dictation' && !current.heard}) +
+    (revealed ? '' : button(t('Проверить','Tekshirish'),'check',{primary:true,disabled:['dictation','marks'].includes(mode) && !current.heard}) +
       button(t('Показать ответ','Javobni ko‘rsatish'),'hint') + button(t('Пропустить','O‘tkazish'),'skip')) +
     button(t('Ещё учу','Hali o‘rganyapman'),'practice-hard',{pressed:marks.get(entry.id)==='hard'}) +
     '</div><div class="actions card-nav">' +
@@ -357,7 +454,7 @@ function answerQuestion(question, result) {
     answer = question.chips.map(id => question.parts.find(part => part.id === id).text)
       .join(mode === 'tokens' ? ' ' : '');
   }
-  if (!answer.trim() || (mode === 'dictation' && !question.heard)) return false;
+  if (!answer.trim() || (['dictation','marks'].includes(mode) && !question.heard)) return false;
   if (mode === 'marks') {
     question.result = answer === question.target.sign ? 'correct' : 'marks';
     return true;
@@ -422,8 +519,12 @@ function playAudio(id, onStart) {
   audioNote = '';
   showStatus();
   const clip = recordings[id];
-  if (!clip) return;
-  const audio = new Audio('data:audio/mpeg;base64,' + clip);
+  if (!clip) {
+    audioNote = t('Для этого слова запись недоступна. Можно пропустить задание.', 'Bu so‘z uchun audio yo‘q. Topshiriqni o‘tkazib yuborish mumkin.');
+    showStatus();
+    return;
+  }
+  const audio = new Audio(new URL(clip, import.meta.url));
   activeAudio = audio;
   audio.play().then(() => {
     if (activeAudio === audio) onStart?.();
@@ -518,6 +619,7 @@ document.addEventListener('click', event => {
   if (action === 'open-alphabet') return changeView('alphabet');
   if (action === 'open-units') return changeView('units');
   if (action === 'focus-units') return $('content').querySelector('[data-action=unit]').focus();
+  if (action === 'download-audio') { void downloadAudio(); return; }
   if (action === 'play') return playAudio(value);
   if (action === 'play-question' && question) {
     return playAudio(question.entry.id,() => {
@@ -594,7 +696,7 @@ document.addEventListener('click', event => {
   } else if (action === 'filter-hard') {
     filterHard = !filterHard;
   } else if (action === 'dictionary-mark') {
-    setMark(value,marks.get(value)==='hard'?'known':'hard');
+    setMark(value,marks.get(value)==='hard'?null:'hard');
     updateDictionary();
     const item = [...$('word-list').querySelectorAll('details')].find(details => details.dataset.id === value);
     if (item) {
@@ -669,3 +771,4 @@ window.addEventListener('pagehide',stopAudio);
 applyLocation();
 render();
 if (!solo && 'serviceWorker' in navigator) navigator.serviceWorker.register('../sw.js').catch(() => {});
+void checkAudioDownload();

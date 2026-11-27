@@ -22,7 +22,8 @@ export function matchesPinyin(answer, expected) {
   const normalized = withoutSeparators(
     spellPinyin(answer).replace(/([a-züê]+)([0-5])/gu, applyNumberedTone)
   );
-  return normalized !== '' && expected.split('/').some(option => (
+  const options = expected === 'yígòng' ? [expected, 'yīgòng'] : expected.split('/');
+  return normalized !== '' && options.some(option => (
     normalized === withoutSeparators(spellPinyin(option))
   ));
 }
@@ -81,11 +82,13 @@ export function createPinyinPractice(root, t) {
   }
 
   function start() {
-    queue = shuffled(source.filter(word => {
+    const filtered = source.filter(word => {
       if (kind === 'all') return true;
       const hanziCount = word.hanzi.match(/\p{Script=Han}/gu)?.length ?? 0;
       return kind === 'characters' ? hanziCount === 1 : hanziCount > 1;
-    }));
+    });
+    const unique = new Map(filtered.map(word => [`${word.hanzi}\0${word.pinyin}`, word]));
+    queue = shuffled([...unique.values()]);
     index = 0;
     resetAnswer();
   }

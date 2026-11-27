@@ -83,7 +83,7 @@ const n=selectWords(draftUnits,'all',progress).length;$('selectionSummary').text
 $('selectAllUnits').onclick=()=>{draftUnits=unitInfo.map(u=>u.id);renderUnits();};
 $('clearUnits').onclick=()=>{draftUnits=[];renderUnits();};
 $('startSelected').onclick=()=>{if(!draftUnits.length)return;units=[...draftUnits];mode='all';$('search').value='';try{localStorage.setItem(selectedUnitsKey,JSON.stringify(units));}catch{}start(true);navigate(unitDestination);window.scrollTo({top:0,behavior:'smooth'});};
-function navigate(nextView){pronunciation.stop();if(nextView==='units'&&view!=='units'){draftUnits=[...units];unitDestination=view==='pinyin'?'pinyin':'study';}view=nextView;$('unitPicker').hidden=view!=='units';$('study').hidden=view!=='study';$('pinyinPractice').hidden=view!=='pinyin';$('dictionary').hidden=view!=='dictionary';for(const [id,target]of [['unitsTab','units'],['studyTab','study'],['pinyinTab','pinyin'],['dictTab','dictionary']]){$(id).classList.toggle('active',view===target);$(id).setAttribute('aria-selected',String(view===target));}$('wordCount').textContent=view==='units'?words.length:selectedWords().length;$('pageEyebrow').textContent=view==='units'?t('ТВОИ ПЕРВЫЕ СЛОВА', 'BIRINCHI SO‘ZLARING'):selectionTitle().toUpperCase();$('pageTitle').textContent=view === 'units' ? t('Выбери юниты.', 'Darslarni tanla.')
+function navigate(nextView,writeHistory=true){pronunciation.stop();if(nextView==='units'&&view!=='units'){draftUnits=[...units];unitDestination=view==='pinyin'?'pinyin':'study';}view=nextView;if(writeHistory&&location.hash!==`#${view}`)history.pushState(null,'',`#${view}`);$('unitPicker').hidden=view!=='units';$('study').hidden=view!=='study';$('pinyinPractice').hidden=view!=='pinyin';$('dictionary').hidden=view!=='dictionary';for(const [id,target]of [['unitsTab','units'],['studyTab','study'],['pinyinTab','pinyin'],['dictTab','dictionary']]){$(id).classList.toggle('active',view===target);$(id).setAttribute('aria-current',view===target?'page':'false');}$('wordCount').textContent=view==='units'?words.length:selectedWords().length;$('pageEyebrow').textContent=view==='units'?t('ТВОИ ПЕРВЫЕ СЛОВА', 'BIRINCHI SO‘ZLARING'):selectionTitle().toUpperCase();$('pageTitle').textContent=view === 'units' ? t('Выбери юниты.', 'Darslarni tanla.')
   : view === 'pinyin' ? t('Тренировка пиньиня.', 'Pinyin mashqi.')
   : units.length === 1 ? topicTitle(unitInfo.find(u => u.id === units[0]))
   : units.length === unitInfo.length ? t('Повторим всё.', 'Hammasini takrorlaymiz.')
@@ -93,7 +93,16 @@ function navigate(nextView){pronunciation.stop();if(nextView==='units'&&view!=='
       : t('учись в своём темпе', 'o‘zingga qulay tezlikda o‘rgan')}`;$('selectedUnit').textContent=selectionTitle();$('dictionaryUnit').textContent=selectionTitle() + t(' · Сменить', ' · O‘zgartirish');if(view==='units')renderUnits();else if(view==='dictionary')renderDict();else if(view==='pinyin')renderPinyin(selectedWords(), selectionTitle());else render();}
 
 let toastTimer;function toast(msg){$('toast').textContent=msg;$('toast').style.display='block';clearTimeout(toastTimer);toastTimer=setTimeout(()=>$('toast').style.display='none',3300);}
-function save(){try{localStorage.setItem(key,JSON.stringify(progress));}catch{toast(t('Браузер не разрешает сохранить прогресс.', 'Natijalarni brauzerda saqlab bo‘lmadi.'));}}
+function save(id, value){
+  try {
+    const saved = JSON.parse(localStorage.getItem(key) || '{}');
+    const current = saved && typeof saved === 'object' && !Array.isArray(saved) ? saved : {};
+    progress = {...current, [id]: value};
+    localStorage.setItem(key, JSON.stringify(progress));
+  } catch {
+    toast(t('Браузер не разрешает сохранить прогресс.', 'Natijalarni brauzerda saqlab bo‘lmadi.'));
+  }
+}
 function start(random=false){pronunciation.stop();queue=selectWords(units,mode,progress);if(random)queue=shuffled(queue);index=0;done=false;revealed=false;graded=new Set();render();}
 function counts(){const group=selectedWords(),known=group.filter(w=>progress[w.id]==='known').length,hard=group.filter(w=>progress[w.id]==='hard').length;$('hardCount').textContent=hard;$('summaryText').textContent=t(`Отмечено «Помню»: ${known} из ${group.length} · Ещё учу: ${hard}`,
     `Esimda: ${group.length} tadan ${known} ta · Hali o‘rganyapman: ${hard}`);return {known,hard};}
@@ -104,20 +113,41 @@ function render(){
     `Bu safar ${queue.length} ta kartochkadan ${graded.size} tasini belgilading. Tanlangan darslarda ${hard} ta qiyin so‘z bor.`);$('repeatHard').hidden=!hard;return;}if(!queue.length)return;
 const w=queue[index];$('unitLabel').textContent=unitTitle(w.unit);$('position').textContent=`${index+1} / ${queue.length}`;$('progressBar').style.width=`${(index+1)/queue.length*100}%`;
 const content=$('cardContent');content.replaceChildren();function line(text,cls){const s=document.createElement('span');s.className=cls;s.textContent=text;content.append(s);}
-if(reverse&&!revealed){line(wordTranslation(w),'front-ru');}else{line(w.hanzi,'hanzi');if(revealed||showPy)line(w.pinyin,'pinyin');if(revealed){line(wordTranslation(w),'translation');if(wordNote(w))line(wordNote(w),'note');}}
-$('flashcard').classList.toggle('revealed',revealed);$('flashcard').setAttribute('aria-label',revealed?t('Скрыть ответ','Javobni yashirish'):t('Показать ответ','Javobni ko‘rsatish'));$('flipHint').textContent=revealed?t('Нажми, чтобы скрыть ответ','Javobni yashirish uchun bos'):t('Нажми, чтобы проверить себя ↗','Javobni ko‘rish uchun bos ↗');$('assess').hidden=!revealed;$('beforeAnswer').hidden=revealed;$('previous').disabled=index===0;$('pinyinToggle').hidden=reverse;$('pinyinToggle').textContent=showPy?t('Пиньинь: виден','Pinyin: ko‘rsatilgan'):t('Пиньинь: скрыт','Pinyin: yashirilgan');}
+if(reverse&&!revealed){line(wordTranslation(w),'front-ru');}else{line(w.hanzi,'hanzi');content.lastChild.lang='zh-Hans';if(revealed||showPy)line(w.pinyin,'pinyin');if(revealed){line(wordTranslation(w),'translation');if(wordNote(w))line(wordNote(w),'note');}}
+const visibleText = [...content.children].map(part => part.textContent).join(' · ');
+$('flashcard').classList.toggle('revealed',revealed);$('flashcard').setAttribute('aria-label',`${visibleText}. ${revealed?t('Скрыть ответ','Javobni yashirish'):t('Показать ответ','Javobni ko‘rsatish')}`);$('flipHint').textContent=revealed?t('Нажми, чтобы скрыть ответ','Javobni yashirish uchun bos'):t('Нажми, чтобы проверить себя ↗','Javobni ko‘rish uchun bos ↗');$('assess').hidden=!revealed;$('beforeAnswer').hidden=revealed;$('previous').disabled=index===0;$('pinyinToggle').hidden=reverse;$('pinyinToggle').textContent=showPy?t('Пиньинь: виден','Pinyin: ko‘rsatilgan'):t('Пиньинь: скрыт','Pinyin: yashirilgan');}
 function advance(){pronunciation.stop();revealed=false;if(index<queue.length-1)index++;else done=true;render();}
-function grade(value){if(!revealed||done||!queue[index])return;progress[queue[index].id]=value;graded.add(queue[index].id);save();advance();}
+function grade(value){if(!revealed||done||!queue[index])return;const id=queue[index].id;progress[id]=value;graded.add(id);save(id,value);advance();}
 $('flashcard').onclick=()=>{revealed=!revealed;render();};$('again').onclick=()=>grade('hard');$('remember').onclick=()=>grade('known');$('next').onclick=advance;$('previous').onclick=()=>{if(index>0){pronunciation.stop();index--;revealed=false;render();}};
 $('changeUnit').onclick=$('dictionaryUnit').onclick=()=>navigate('units');$('direction').onclick=()=>{pronunciation.stop();reverse=!reverse;revealed=false;render();};$('pinyinToggle').onclick=()=>{showPy=!showPy;render();};$('shuffle').onclick=()=>{start(true);toast(t('Карточки перемешаны', 'Kartochkalar aralashtirildi'));};$('allMode').onclick=$('backAll').onclick=()=>{mode='all';start();};$('hardMode').onclick=$('repeatHard').onclick=()=>{mode='hard';start(true);};$('restart').onclick=()=>start(true);
 $('unitsTab').onclick=()=>navigate('units');$('studyTab').onclick=()=>navigate('study');$('dictTab').onclick=()=>navigate('dictionary');
 $('pinyinTab').onclick=()=>navigate('pinyin');
 $('pinyinUnit').onclick=()=>navigate('units');
 const normalize=s=>s.normalize('NFD').replace(/[\u0300-\u036f]/g,'').toLowerCase().replace(/[\s'‘’ʻʼ`]+/g,'');
-function renderDict(){const q=normalize($('search').value),list=selectedWords().filter(w=>[w.hanzi, w.pinyin, wordTranslation(w)].some(value => normalize(value).includes(q)));$('results').textContent=t(`Найдено: ${list.length}`, `Topildi: ${list.length}`);const root=$('wordList');root.replaceChildren();for(const w of list){const row=document.createElement('div');row.className='word';const h=document.createElement('div');h.className='word-hanzi';h.textContent=w.hanzi;const info=document.createElement('div');const py=document.createElement('div');py.className='word-py';py.textContent=w.pinyin;const translation=document.createElement('div');translation.className='word-ru';translation.textContent=wordTranslation(w);info.append(py,translation);if(progress[w.id]){const mark=document.createElement('div');mark.className='word-mark';mark.textContent=progress[w.id]==='hard'?t('↺ Ещё учу','↺ Hali o‘rganyapman'):t('✓ Помню','✓ Esimda');info.append(mark);}const sound=document.createElement('button');sound.textContent='♪';sound.setAttribute('aria-label',t(`Прослушать ${w.hanzi}`, `${w.hanzi} talaffuzini tinglash`));sound.onclick=()=>pronunciation.play(w);row.append(h,info,sound);root.append(row);}}
+function renderDict(){const q=normalize($('search').value),pinyinQuery=/^[a-züv:]+[0-5](?:[a-züv:]+[0-5]?)*$/i.test(q)?q.replace(/[0-5]/g,''):q,list=selectedWords().filter(w=>[w.hanzi, w.ru, w.uz].some(value => normalize(value).includes(q)) || normalize(w.pinyin).includes(pinyinQuery));list.sort((a,b)=>Number(normalize(b.pinyin)===pinyinQuery||normalize(b.hanzi)===q)-Number(normalize(a.pinyin)===pinyinQuery||normalize(a.hanzi)===q));$('results').textContent=t(`Найдено: ${list.length}`, `Topildi: ${list.length}`);const root=$('wordList');root.replaceChildren();for(const w of list){const row=document.createElement('div');row.className='word';const h=document.createElement('div');h.className='word-hanzi';h.lang='zh-Hans';h.textContent=w.hanzi;const info=document.createElement('div');const py=document.createElement('div');py.className='word-py';py.textContent=w.pinyin;const translation=document.createElement('div');translation.className='word-ru';translation.textContent=wordTranslation(w);info.append(py,translation);if(progress[w.id]){const mark=document.createElement('div');mark.className='word-mark';mark.textContent=progress[w.id]==='hard'?t('↺ Ещё учу','↺ Hali o‘rganyapman'):t('✓ Помню','✓ Esimda');info.append(mark);}const sound=document.createElement('button');sound.textContent='♪';sound.setAttribute('aria-label',t(`Прослушать ${w.hanzi}`, `${w.hanzi} talaffuzini tinglash`));sound.onclick=()=>pronunciation.play(w);row.append(h,info,sound);root.append(row);}}
 $('search').oninput=renderDict;
+window.addEventListener('storage', event => {
+  if (event.key === key) {
+    try { progress = JSON.parse(event.newValue || '{}'); } catch { progress = {}; }
+    if (!progress || typeof progress !== 'object' || Array.isArray(progress)) progress = {};
+    if (view === 'units') renderUnits();
+    else if (view === 'dictionary') renderDict();
+    else if (view === 'study') render();
+  }
+  if (event.key === languageKey && ['ru','uz'].includes(event.newValue)) changeLanguage(event.newValue);
+});
 const pronunciation=createPronunciationPlayer({audio:$('wordAudio'),panel:$('audioPlayer'),wordLabel:$('audioWord'),status:$('audioStatus'),close:$('closeAudio'), translate:t});
 $('speak').onclick=()=>{if(reverse&&!revealed){toast(t('Сначала открой ответ, чтобы услышать слово.', 'So‘zni tinglash uchun avval javobni och.'));return;}if(queue[index])pronunciation.play(queue[index]);};
 $('help').onclick=()=>$('helpDialog').showModal();$('closeHelp').onclick=()=>$('helpDialog').close();$('helpDialog').onclick=e=>{if(e.target===$('helpDialog')){const r=e.target.getBoundingClientRect();if(e.clientX<r.left||e.clientX>r.right||e.clientY<r.top||e.clientY>r.bottom)e.target.close();}};
 document.addEventListener('keydown',e=>{if($('helpDialog').open||$('study').hidden||/INPUT|SELECT|BUTTON/.test(document.activeElement.tagName))return;if(e.code==='Space'&&!done&&queue.length){e.preventDefault();revealed=!revealed;render();}if(e.key==='ArrowRight'&&!done&&queue.length)advance();if(e.key==='ArrowLeft'&&index>0){pronunciation.stop();index--;revealed=false;render();}});
-renderLanguage();start(true);navigate(restoredUnit?'study':'units');if('serviceWorker'in navigator)navigator.serviceWorker.register('./sw.js').catch(()=>{});
+function routeFromHash() {
+  const destination = location.hash.slice(1);
+  navigate(['units','study','pinyin','dictionary'].includes(destination) ? destination : (restoredUnit ? 'study' : 'units'), false);
+}
+window.addEventListener('hashchange', routeFromHash);
+window.addEventListener('pageshow', () => {
+  try { changeLanguage(localStorage.getItem(languageKey) === 'uz' ? 'uz' : 'ru'); } catch {}
+});
+const initialView = ['units','study','pinyin','dictionary'].includes(location.hash.slice(1)) ? location.hash.slice(1) : (restoredUnit ? 'study' : 'units');
+if (!location.hash) history.replaceState(null, '', `#${initialView}`);
+renderLanguage();start(true);navigate(initialView,false);if('serviceWorker'in navigator)navigator.serviceWorker.register('./sw.js').catch(()=>{});

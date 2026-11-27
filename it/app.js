@@ -53,6 +53,7 @@ let dictUnit = 'all';
 let dictHard = false;
 let dictLimit = 35;
 let audio = null;
+const courseBase = new URL('./', location.href);
 
 function restoreSession(value) {
   if (!value || !Array.isArray(value.questions) || !value.questions.length ||
@@ -70,7 +71,10 @@ function route() {
 }
 
 function go(destination) {
-  if (location.hash === '#' + destination) route();
+  if (location.hash === '#' + destination) {
+    route();
+    $('heading').focus();
+  }
   else location.hash = destination;
 }
 
@@ -104,8 +108,9 @@ function it(text, classes = 'it-text') {
   return '<span lang="it" class="' + classes + '">' + esc(text) + '</span>';
 }
 
-function player(text, slow = false) {
-  return btn('▶ Слушать','▶ Tinglash','audio',text,'btn', 'aria-label="' + esc(t('Слушать · ','Tinglash · ') + text) + '"') +
+function player(text, slow = false, hideText = false) {
+  const label = hideText ? t('Прослушать задание','Topshiriqni tinglash') : t('Слушать · ','Tinglash · ') + text;
+  return btn('▶ Слушать','▶ Tinglash','audio',text,'btn', 'aria-label="' + esc(label) + '"') +
     (slow ? btn('Медленнее','Sekinroq','audio-slow',text) : '');
 }
 
@@ -123,12 +128,20 @@ function speak(text, slow) {
     status.textContent = t('Запись недоступна.','Audio mavjud emas.');
     return;
   }
-  const clip = new Audio('data:audio/mpeg;base64,' + IT_AUDIO[text]);
+  const clip = new Audio(new URL('audio/' + IT_AUDIO[text] + '.mp3', courseBase).href);
   audio = clip;
+  status.textContent = t('Загружается запись…','Audio yuklanmoqda…');
+  clip.preservesPitch = true;
   clip.playbackRate = slow ? 0.78 : 1;
   function failed() {
-    if (audio === clip) status.textContent = t('Не удалось воспроизвести запись.','Audioni ijro etib bo‘lmadi.');
+    if (audio === clip) status.textContent = t('Запись не загрузилась. Нажми «Слушать» ещё раз.','Audio yuklanmadi. «Tinglash»ni qayta bosing.');
   }
+  clip.addEventListener('playing',() => {
+    if (audio === clip) status.textContent = t('Воспроизведение…','Ijro etilmoqda…');
+  });
+  clip.addEventListener('ended',() => {
+    if (audio === clip) status.textContent = '';
+  });
   clip.addEventListener('error',failed,{once:true});
   clip.play().catch(failed);
 }
@@ -156,13 +169,22 @@ function unitOptions(current, all = false) {
     '>' + esc((u.id || '0') + ' · ' + u.title) + '</option>').join('');
 }
 
+function cardCount(count) {
+  if (lang === 'uz') return count + ' ta kartochka';
+  const lastTwo = count % 100;
+  const last = count % 10;
+  const noun = lastTwo >= 11 && lastTwo <= 14 ? 'карточек' :
+    last === 1 ? 'карточка' : last >= 2 && last <= 4 ? 'карточки' : 'карточек';
+  return count + ' ' + noun;
+}
+
 function renderTopics() {
   const list = IT_UNITS.map(unit => {
     const words = IT_WORDS.filter(word => word.sources.some(source => source.unit === unit.id));
     const count = words.filter(word => progress.get(word.id) === 'hard').length;
     const label = '<span class="tile-symbol" aria-hidden="true">' + unit.id + '</span><span><span class="tile-title it-text" lang="it">' +
       esc(unit.title) + '</span><span class="meta">' + esc(unit[lang]) + '</span><span class="meta">' +
-      words.length + t(' карточек',' ta kartochka') + (count ? ' · '+count+t(' трудных',' ta qiyin') : '') +
+      cardCount(words.length) + (count ? ' · '+count+t(' трудных',' ta qiyin') : '') +
       '</span></span><span class="tick" aria-hidden="true">' + (chosen.has(unit.id) ? '✓' : '') + '</span>';
     return '<button type="button" class="tile" data-action="unit" data-value="' + unit.id +
       '" aria-pressed="' + chosen.has(unit.id) + '">' + label + '</button>';
@@ -249,7 +271,9 @@ function renderPractice() {
     '<select id="mode">' + modes + '</select></label>' +
     (mode === 'grammar' ? '' : '<label>' + t('Сколько слов','So‘zlar soni') + '<select id="amount">' +
       [6,10,20].map(n => '<option'+(n===amount?' selected':'')+'>'+n+'</option>').join('') + '</select></label>') +
-    '</div>' + btn('Начать','Boshlash','start','','primary') + '</div>' + renderLesson(IT_LESSONS[practiceUnit]) + '</section>';
+    '</div>' + btn('Начать','Boshlash','start','','primary') +
+    btn('Изменить выбранные юниты','Tanlangan bo‘limlarni o‘zgartirish','route','topics') +
+    '</div>' + renderLesson(IT_LESSONS[practiceUnit]) + '</section>';
 }
 
 function drillQuestions(unit) {
@@ -278,7 +302,9 @@ function questionForLocale(question) {
     const meanings = target.split(/\s+\/\s+|\s+ yoki\s+/);
     return {...question,language:lang,accepted:[target,...meanings]};
   }
-  return {...question,accepted:[word.it,...(word.forms ? [word.forms.singular] : [])]};
+  const equivalents = IT_WORDS.filter(candidate => candidate[lang] === word[lang]);
+  const accepted = equivalents.flatMap(candidate => [candidate.it, ...(candidate.forms ? [candidate.forms.singular] : [])]);
+  return {...question,accepted:[...new Set(accepted)]};
 }
 
 function start(questions) {
@@ -327,10 +353,11 @@ function renderQuestion() {
   const feedback = a.result ? t(...(feedbacks[a.result] || feedbacks.wrong)) : '';
   const tone = a.result === 'correct' ? 'good' : a.result === 'shown' ? 'shown' : 'bad';
   return '<section class="surface practice"><p class="meta">' + (session.index+1) + ' / ' + session.questions.length +
-    '</p><progress class="progress" value="' +(session.index+1)+ '" max="' + session.questions.length+'"></progress>' +
+    '</p><progress class="progress" value="' +(session.index+1)+ '" max="' + session.questions.length +
+    '" aria-label="' + t('Ход практики','Mashq jarayoni') + '"></progress>' +
     '<label for="answer">' + esc(questionLabel(q)) + '</label>' +
     (clue ? '<div class="prompt">' + clue + '</div>' : '') +
-    (q.audio ? '<div class="listen-controls">' + player(q.audio,true) + '</div>' : '') +
+    (q.audio ? '<div class="listen-controls">' + player(q.audio,true,true) + '</div>' : '') +
     '<input id="answer" lang="' + q.language + '" type="text" autocomplete="off" autocapitalize="off" spellcheck="false" value="' +
     esc(a.text) + '">' + keys + '<p id="feedback" role="status" data-tone="' + tone + '">' + esc(feedback) + '</p>' +
     (a.assisted ? '<p>' + q.accepted.map(s=>q.language === 'it' ? it(s) : esc(s)).join(' · ') + '</p>' : '') +
@@ -357,8 +384,18 @@ function renderResults() {
     assisted:['С образцом','Namuna bilan'],wrong:['Пока с ошибкой','Xato bilan'],skipped:['Пропущено','O‘tkazildi']};
   const totals = Object.entries(labels).map(([key,label]) => '<dt>'+t(...label)+'</dt><dd>' +
     stats.filter(s=>s===key).length+'</dd>').join('');
+  const review = session.questions.map((question, index) => {
+    const item = questionForLocale(question);
+    const word = wordById.get(item.wordId);
+    const userReply = session.replies[index]?.[item.prompt === 'from-it' ? lang : 'it'];
+    const prompt = item.frame || (word ? (item.prompt === 'from-it' ? word.it : word[lang]) : questionLabel(item));
+    return '<li><strong>' + esc(prompt) + '</strong> · ' + esc(t(...labels[stats[index]])) +
+      '<p>' + t('Твой ответ','Javobingiz') + ': ' + esc(userReply?.text || '—') + '</p>' +
+      '<p>' + t('Возможный ответ','Mumkin bo‘lgan javob') + ': ' + esc(item.accepted.join(' · ')) + '</p></li>';
+  }).join('');
   return '<section class="surface practice"><h2>' + t('Результат','Natija') + '</h2><dl class="summary">' + totals +
-    '</dl><div class="actions">' + btn('Повторить ошибки','Xatolarni takrorlash','retry','','primary',
+    '</dl><details><summary>' + t('Посмотреть ответы','Javoblarni ko‘rish') + '</summary><ol>' + review +
+    '</ol></details><div class="actions">' + btn('Повторить ошибки','Xatolarni takrorlash','retry','','primary',
       stats.every(s=>s==='first')?'disabled':'') +
     btn('Повторить трудные','Qiyinlarini takrorlash','begin','hard','btn',hardWords().length?'':'disabled') +
     btn('К последнему вопросу','Oxirgi savolga','question-move','-1') +
@@ -402,7 +439,9 @@ function dictionaryRows() {
   if (!rows.length) return '<p>' + t('Слова не найдены.','So‘z topilmadi.') + '</p>';
   return '<p class="meta">' + t('Найдено · ','Topildi · ') + rows.length + '</p>' +
     rows.slice(0,dictLimit).map(word => {
-      const sources = word.sources.map(s => (s.unit ? 'U'+s.unit : t('Вводный','Kirish')) + ' · PDF ' + s.page).join(' / ');
+      const sources = word.sources.map(s => 'Nuovo Progetto Italiano 1 · ' +
+        (s.unit ? t('юнит ','bo‘lim ') + s.unit : t('вводный юнит','kirish bo‘limi')) +
+        ' · ' + t('стр. ','sahifa ') + s.page).join(' / ');
       const hard = progress.get(word.id) === 'hard';
       return '<article class="word"><div><strong>' + it(word.it) + '</strong><p>' + esc(word[lang]) + '</p>' +
         nounForms(word) + '<p class="meta">' + esc(sources) + '</p></div><div class="actions">' +
@@ -546,7 +585,10 @@ content.addEventListener('keydown',event => {
   }
 });
 
-window.addEventListener('hashchange',route);
+window.addEventListener('hashchange',() => {
+  route();
+  $('heading').focus();
+});
 window.addEventListener('pageshow',() => {
   const current = readLanguage();
   if (lang !== current) { lang = current; render(); }

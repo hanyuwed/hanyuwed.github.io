@@ -2,7 +2,7 @@
 
 const languageKey = 'hanyu-language-v1';
 const prefix = 'hanyuwed:es:';
-const keys = {deck: prefix + 'deck:v1', units: prefix + 'units:v1', session: prefix + 'session:v1', word: id => prefix + 'progress:v1:' + id};
+const keys = {deck: prefix + 'deck:v1', units: prefix + 'units:v1', session: prefix + 'session:v1', practiceLimit: prefix + 'practice-limit:v1', word: id => prefix + 'progress:v1:' + id};
 const $ = id => document.getElementById(id);
 const content = $('content');
 const esc = value => String(value ?? '').replace(/[&<>"']/g, c => ({
@@ -45,6 +45,7 @@ const views = {
   topics: ['Темы','Bo‘limlar'],
   cards: ['Карточки','Kartochkalar'],
   practice: ['Тест по юниту','Dars bo‘yicha test'],
+  materials: ['Материалы и аудио','Materiallar va audio'],
   dictionary: ['Словарь','Lug‘at']
 };
 let view = 'topics';
@@ -52,6 +53,9 @@ let deck = restoreDeck();
 let session = restoreSession(saved(keys.session,null));
 let practiceUnit = ES_UNITS[session?.unit]?.id ?? [...chosen][0] ?? 0;
 let mode = session?.mode ?? 'from-es';
+const savedPracticeLimit = saved(keys.practiceLimit,10);
+let practiceLimit = [0,10,20].includes(savedPracticeLimit) ? savedPracticeLimit : 10;
+let focusNavigation = false;
 let query = '';
 let dictUnit = 'all';
 let dictHard = false;
@@ -79,9 +83,12 @@ function route() {
   const requested = location.hash.slice(1);
   view = Object.hasOwn(views,requested) ? requested : 'topics';
   render();
+  if (focusNavigation) $('heading').focus();
+  focusNavigation = false;
 }
 
 function go(destination) {
+  focusNavigation = true;
   if (location.hash === '#' + destination) route();
   else location.hash = destination;
 }
@@ -254,7 +261,7 @@ function render() {
   $('navigation').innerHTML = Object.entries(views).map(([id,names]) =>
     button(t(...names),'route',id,'',id === view ? 'aria-current="page"' : '')).join('');
   $('audio-status').textContent = '';
-  content.innerHTML = ({topics:renderTopics,cards:renderCards,practice:renderPractice,dictionary:renderDictionary})[view]();
+  content.innerHTML = ({topics:renderTopics,cards:renderCards,practice:renderPractice,materials:renderMaterials,dictionary:renderDictionary})[view]();
 }
 
 function unitOptions(current, includeAll = false) {
@@ -389,13 +396,25 @@ function renderPractice() {
   const modes = options.map(([id,ru,uz]) => '<option value="' + id + '"' + (mode===id ? ' selected' : '') + '>' + t(ru,uz) + '</option>').join('');
   const lesson = ES_LESSONS[practiceUnit];
   const count = mode === 'grammar' ? lesson.drills.length : testWords(practiceUnit).length;
+  const shownCount = practiceLimit === 0 ? count : Math.min(count, practiceLimit);
+  const limits = [[10,'10','10'],[20,'20','20'],[0,'Все','Barchasi']].map(([value,ru,uz]) =>
+    '<option value="' + value + '"' + (practiceLimit === value ? ' selected' : '') + '>' + t(ru,uz) + '</option>').join('');
   return '<section><div class="surface lesson"><div class="bar controls"><label>' + t('Юнит','Dars') +
     '<select id="practice-unit">' + unitOptions(practiceUnit) + '</select></label><label>' + t('Режим','Rejim') +
-    '<select id="mode">' + modes + '</select></label>' +
-    '</div><p class="meta" role="status">' + t(`Вопросов в тесте: ${count}`, `Savollar soni: ${count}`) + '</p>' +
+    '<select id="mode">' + modes + '</select></label><label>' + t('Количество вопросов','Savollar soni') +
+    '<select id="practice-limit">' + limits + '</select></label>' +
+    '</div><p class="meta" role="status">' + t(`Вопросов в тесте: ${shownCount} из ${count}`, `Savollar soni: ${shownCount} / ${count}`) + '</p>' +
     btn('Начать тест','Testni boshlash','start','','primary') + '</div><details class="surface lesson"><summary>' +
     t('Материалы юнита и аудио','Dars materiallari va audio') + '</summary><div id="download-audio" data-unit="' +
     practiceUnit + '">' + downloadControls(practiceUnit) + '</div>' + renderLesson(lesson) + '</details></section>';
+}
+
+function renderMaterials() {
+  const lesson = ES_LESSONS[practiceUnit];
+  return '<section><div class="surface lesson"><label>' + t('Юнит','Dars') +
+    '<select id="materials-unit">' + unitOptions(practiceUnit) + '</select></label>' +
+    '<div id="download-audio" data-unit="' + practiceUnit + '">' + downloadControls(practiceUnit) + '</div>' +
+    renderLesson(lesson) + '</div></section>';
 }
 
 function drillQuestions(unit) {
@@ -447,7 +466,11 @@ function start(questions) {
   session = {index:0,done:false,unit:practiceUnit,mode,questions,replies:[]};
   saveSession();
   render();
-  $('answer')?.focus();
+  focusQuestion();
+}
+
+function focusQuestion() {
+  (content.querySelector('[data-action="audio"]') || content.querySelector('[data-action="choose"]') || $('answer'))?.focus();
 }
 
 function saveSession() { write(keys.session,session); }
@@ -503,13 +526,13 @@ function renderQuestion() {
   const unit = ES_UNITS[session.unit];
   return '<section class="surface practice"><p class="meta">' + (unit ? esc(unit[lang]) + ' · ' : '') +
     (session.index+1) + ' / ' + session.questions.length +
-    '</p><progress class="progress" value="' +(session.index+1)+ '" max="' + session.questions.length+'"></progress>' +
-    '<label for="answer">' + esc(questionLabel(q)) + '</label>' +
+    '</p><progress class="progress" aria-label="' + t('Ход теста','Test jarayoni') + '" value="' +(session.index+1)+ '" max="' + session.questions.length+'"></progress>' +
+    (choices ? '<p>' + esc(questionLabel(q)) + '</p>' : '<label for="answer">' + esc(questionLabel(q)) + '</label>') +
     (clue ? '<div class="prompt">' + clue + '</div>' : '') +
     (q.audio ? '<div class="listen-controls">' + player(q.audio,true,true) + '</div>' : '') +
     (choices ? '<div class="listen-controls">' + choices + '</div>' : '') +
     (tokens ? '<div class="listen-controls">' + tokens + btn('Очистить','Tozalash','clear-tokens') + '</div>' : '') +
-    '<input id="answer" lang="' + q.language + '" type="text" autocomplete="off" autocapitalize="off" spellcheck="false" ' + (choices ? 'readonly' : '') + ' value="' +
+    '<input id="answer" lang="' + q.language + '" type="' + (choices ? 'hidden' : 'text') + '" autocomplete="off" autocapitalize="off" spellcheck="false" value="' +
     esc(a.text) + '">' + keys + '<p id="feedback" role="status" data-tone="' + tone + '">' + esc(feedback) + '</p>' +
     (a.assisted ? '<p>' + q.accepted.map(s=>q.language === 'es' ? es(s) : esc(s)).join(' · ') + '</p>' : '') +
     ((a.solved || a.assisted) && q.model && Object.hasOwn(ES_AUDIO,q.model) ?
@@ -569,7 +592,7 @@ function verify() {
   saveSession();
   render();
   if (a.solved) content.querySelector('[data-action="question-move"][data-value="1"]').focus();
-  else $('answer').focus();
+  else focusQuestion();
 }
 
 function renderDictionary() {
@@ -594,7 +617,8 @@ function dictionaryRows() {
   if (find) rows.sort((a,b) => Number(matchScore(b)) - Number(matchScore(a)));
   return '<p class="meta">' + t('Найдено · ','Topildi · ') + rows.length + '</p>' +
     rows.slice(0,dictLimit).map(word => {
-      const sources = word.sources.map(s => (s.unit + 1) + ' · ' + (s.page === 'PDF' ? 'PDF' : t('Фото ','Rasm ') + s.page)).join(' / ');
+      const sourceUnits = [...new Set(word.sources.map(source => source.unit + 1))].join(', ');
+      const sources = t('Материалы уроков: ','Dars materiallari: ') + sourceUnits;
       const hard = progress.get(word.id) === 'hard';
       return '<article class="word"><div><strong>' + es(word.es) + '</strong><p>' + esc(word[lang]) + '</p>' +
         wordGender(word) + wordExample(word) + '<p class="meta">' + esc(sources) + '</p></div><div class="actions">' +
@@ -640,6 +664,8 @@ document.addEventListener('click',event => {
     a.solved = false;
     saveSession();
     render();
+    const chosen = content.querySelector('[data-action="choose"][aria-pressed="true"]');
+    (chosen || content.querySelector('[data-action="token"]:not([disabled])') || content.querySelector('[data-action="clear-tokens"]'))?.focus();
     return;
   }
   if (action === 'route') { go(value); return; }
@@ -679,7 +705,8 @@ document.addEventListener('click',event => {
     deck.opened.delete(deck.entries[deck.index]?.id);
   }
   if (action === 'start') {
-    start(mode === 'grammar' ? drillQuestions(practiceUnit) : wordQuestions(practiceUnit,mode));
+    const questions = mode === 'grammar' ? shuffled(drillQuestions(practiceUnit)) : wordQuestions(practiceUnit,mode);
+    start(practiceLimit ? questions.slice(0,practiceLimit) : questions);
     return;
   }
   if (action === 'check') { verify(); return; }
@@ -705,10 +732,16 @@ document.addEventListener('click',event => {
     else session.index = Math.max(0,session.index + Number(value));
     saveSession();
     render();
-    $('answer')?.focus();
+    focusQuestion();
     return;
   }
-  if (action === 'retry') { start(session.questions.filter((_,i) => resultAt(i)!=='first')); return; }
+  if (action === 'retry') {
+    const questions = session.questions.filter((_,i) => resultAt(i)!=='first');
+    practiceUnit = session.unit;
+    mode = session.mode;
+    start(questions);
+    return;
+  }
   if (action === 'practice-clear') {
     session = null;
     saveSession();
@@ -750,9 +783,13 @@ content.addEventListener('input',event => {
 content.addEventListener('change',event => {
   const {id,value} = event.target;
   if (id === 'dict-unit') { dictUnit = value; dictLimit = 35; updateDictionary(); }
-  if (id === 'practice-unit' || id === 'mode') {
-    if (id === 'practice-unit') practiceUnit = Number(value);
-    else mode = value;
+  if (id === 'practice-unit' || id === 'materials-unit' || id === 'mode' || id === 'practice-limit') {
+    if (id === 'practice-unit' || id === 'materials-unit') practiceUnit = Number(value);
+    else if (id === 'mode') mode = value;
+    else {
+      practiceLimit = Number(value);
+      write(keys.practiceLimit,practiceLimit);
+    }
     render();
     $(id)?.focus();
   }

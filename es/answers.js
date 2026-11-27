@@ -23,5 +23,5 @@ function checkSpanish(value, item) {
   if (expected.some(option => option.includes('ñ') && option.replaceAll('ñ','n') === actual)) return 'enye';
   if (item.article && expected.some(option => withoutArticle(option) === withoutArticle(actual))) return 'article';
   if (item.punctuation && item.accepted.some(option => spanishSpelling(option) === spanishSpelling(value))) return 'punctuation';
-  return item.hintType || 'wrong';
+  return 'wrong';
 }

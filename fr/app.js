@@ -341,7 +341,8 @@ function presentQuestion(entry, person, form) {
     inversion:['Переделай предложение в вопрос с инверсией.','Gapni inversiya yordamida savolga aylantiring.'],
     open:['Задай вопрос любым из трёх изученных способов.','O‘rganilgan uch usuldan biri bilan savol tuzing.']
   }[form];
-  const title = form === 'verb' ? person + ' ___ ' + OBJECTS[entry.verb] + '.' :
+  const subject = person === 'je' && requiresElision(forms.verb) ? 'j’___' : person + ' ___';
+  const title = form === 'verb' ? subject + ' ' + OBJECTS[entry.verb] + '.' :
     form === 'affirmative' ? person + ' + ' + entry.verb + ' + ' + OBJECTS[entry.verb] : forms.affirmative;
   return {
     id:['present',entry.verb,person,form].join('-'), title, fr:true, promptFr:true,
@@ -628,6 +629,7 @@ function renderHints() {
 
 function render() {
   document.documentElement.lang = lang;
+  document.title = t('hanyuwed — Карточки французского', 'hanyuwed — Fransuz tili kartochkalari');
   for (const button of document.querySelectorAll('[data-lang]')) button.setAttribute('aria-pressed',button.dataset.lang===lang);
   const headings = {
     topics:[['Выбери темы.','Mavzularni tanla.'],['Можно повторять одну тему или смешать несколько.','Bir yoki bir nechta mavzuni takrorlash mumkin.']],
@@ -789,10 +791,15 @@ function go(route) {
 }
 window.addEventListener('hashchange', updateRoute);
 window.addEventListener('storage',event=>{
+  if (event.key === languageKey) {
+    setLanguage(readLanguage());
+    return;
+  }
   if (!event.key?.startsWith(PREFIX+'progress:v1:')) return;
   const id = event.key.split(':').at(-1);
   if (entries.some(e=>e.id===id)) progress[id] = storage.read(keyFor(id),null);
 });
+window.addEventListener('pageshow', () => setLanguage(readLanguage()));
 
 function setLanguage(language) {
   if (language===lang) return;

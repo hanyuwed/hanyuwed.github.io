@@ -29,5 +29,8 @@ for (const button of buttons) {
   });
 }
 window.addEventListener('pageshow', () => renderLanguage(savedLanguage()));
+window.addEventListener('storage', event => {
+  if (event.key === languageKey || event.key === null) renderLanguage(savedLanguage());
+});
 renderLanguage(savedLanguage());
 if ('serviceWorker' in navigator) navigator.serviceWorker.register('./sw.js').catch(() => {});

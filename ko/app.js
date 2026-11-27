@@ -127,9 +127,16 @@ function localize() {
   for (const [element, ru] of localized) element.textContent = t(ru, element.dataset.uz);
   for (const [element, attribute, ru] of attributes) element.setAttribute(attribute, t(ru, element.getAttribute(`data-uz-${attribute}`)));
   for (const button of $('languages').querySelectorAll('button')) pressed(button, language === button.dataset.language);
+  updatePracticeAvailability();
+}
+function updatePracticeAvailability() {
+  const count = contextTasks(selected).length;
+  const option = $('practice-mode').querySelector('option[value="context"]');
+  option.textContent = t(`Фразы и частицы · ${count}`, `Ibora va qo‘shimchalar · ${count}`);
 }
 function updateSelection(ids, focusId) {
   selected = new Set(ids);
+  updatePracticeAvailability();
   cards = practice = null;
   cardMode = 'all';
   save(settingsKey, JSON.stringify([...selected]));
@@ -271,8 +278,7 @@ function newPractice(queue) {
     else if (mode === 'numbers') queue = numberTasks(words, language, $('number-kind').value, entries);
     else {
       const type = mode === 'meaning' && practiceDirection === 'translation' ? 'translation' : mode;
-      const relevant = type === 'dictation' ? words.filter(word => word.unit <= 9) : words;
-      queue = relevant.map(word => spellingTask(word, language, type));
+      queue = words.map(word => spellingTask(word, language, type));
     }
     queue = randomOrder(queue);
     if ($('practice-limit').value === '10') queue = queue.slice(0, 10);
@@ -348,8 +354,8 @@ function checkAnswer() {
   if (!task || practice.completed || composing || compositionJustEnded) return;
   const result = evaluate(task, $('answer').value);
   practice.result = result;
-  if (['correct','meaning-spacing'].includes(result)) {
-    finishAnswer(practice.hadMistake || result === 'meaning-spacing' ? 'fixed' : 'first');
+  if (result === 'correct') {
+    finishAnswer(practice.hadMistake ? 'fixed' : 'first');
     return;
   }
   if (result !== 'empty') practice.hadMistake = true;
@@ -396,8 +402,9 @@ function renderDictionary() {
   $('word-list').replaceChildren(fragment);
 }
 const navigation = [...document.querySelectorAll('[data-view]')];
-function navigate(nextView, scroll = true) {
+function navigate(nextView, scroll = true, writeHistory = true) {
   view = nextView;
+  if (writeHistory && location.hash !== `#${view}`) history.pushState(null, '', `#${view}`);
   stopAudio();
   for (const button of navigation) {
     const isCurrent = button.dataset.view === view;
@@ -556,5 +563,12 @@ $('clear-syllable').onclick = () => {
 };
 for (const button of document.querySelectorAll('[data-read]')) button.onclick = () => speak(button.dataset.read);
 localize();
-navigate('units', false);
+function routeFromHash() {
+  const destination = location.hash.slice(1);
+  navigate(['units','cards','practice','dictionary'].includes(destination) ? destination : 'units', false, false);
+}
+window.addEventListener('hashchange', routeFromHash);
+const initialView = ['units','cards','practice','dictionary'].includes(location.hash.slice(1)) ? location.hash.slice(1) : 'units';
+if (!location.hash) history.replaceState(null, '', `#${initialView}`);
+navigate(initialView, false, false);
 if (!standalone && 'serviceWorker' in navigator) navigator.serviceWorker.register('../sw.js').catch(() => {});

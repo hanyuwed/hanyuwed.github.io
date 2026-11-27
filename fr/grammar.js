@@ -98,15 +98,15 @@ function pastExercise(entry, subject, person, gender, plural, mode) {
 }
 
 const CONTEXT_EXERCISES = [
-  ['article','___ mère',['Определённый артикль · «мать»','Aniq artikl · «ona»'],['la'],['Mère — женский род.','Mère — féminin.']],
-  ['article','___ père',['Определённый артикль · «отец»','Aniq artikl · «ota»'],['le'],['Père — мужской род.','Père — masculin.']],
+  ['article','___ mère',['Определённый артикль · «мать»','Aniq artikl · «ona»'],['la'],['Mère — женский род.','Mère — ayol jinsi.']],
+  ['article','___ père',['Определённый артикль · «отец»','Aniq artikl · «ota»'],['le'],['Père — мужской род.','Père — erkak jinsi.']],
   ['article','___ entrée',['Определённый артикль · «вход»','Aniq artikl · «kirish»'],['l’'],['Перед гласной le и la сокращаются до l’.','Unli oldidan le va la o‘rniga l’ yoziladi.']],
   ['article','___ parents',['Определённый артикль · «родители»','Aniq artikl · «ota-ona»'],['les'],['В определённой форме множественного числа используется les.','Aniq artiklning ko‘plik shakli les.']],
   ['article','Elle est ___ . (boulanger)',['Назови её профессию.','Uning kasbini yozing.'],['boulangère'],['В таком предложении профессия после être употребляется без артикля.','Bu gapda être dan keyin kasb artiklsiz keladi.']],
   ['article','C’est ___ boulangère.',['Впиши неопределённый артикль.','Noaniq artiklni yozing.'],['une'],['После c’est в этом представлении нужен артикль une.','Bu tanishtirishda c’est dan keyin une artikli kerak.']],
   ['agreement','un ___ appartement (beau)',['Согласуй прилагательное.','Sifatni mos shaklda yozing.'],['bel'],['Перед гласной в мужском роде используется bel.','Erkak rodida unli oldidan bel ishlatiladi.']],
-  ['agreement','une ___ maison (beau)',['Согласуй прилагательное.','Sifatni mos shaklda yozing.'],['belle'],['Maison — женский род.','Maison — féminin.']],
-  ['agreement','La cuisine est ___ . (équipé)',['Согласуй прилагательное.','Sifatni mos shaklda yozing.'],['équipée'],['Cuisine — женский род, единственное число.','Cuisine — féminin, birlik.']],
+  ['agreement','une ___ maison (beau)',['Согласуй прилагательное.','Sifatni mos shaklda yozing.'],['belle'],['Maison — женский род.','Maison — ayol jinsi.']],
+  ['agreement','La cuisine est ___ . (équipé)',['Согласуй прилагательное.','Sifatni mos shaklda yozing.'],['équipée'],['Cuisine — женский род, единственное число.','Cuisine — ayol jinsi, birlik.']],
   ['agreement','Paul et Marc sont ___ . (content)',['Согласуй прилагательное.','Sifatni mos shaklda yozing.'],['contents'],['Два человека, мужской род: окончание -s.','Ikki kishi, masculin: -s qo‘shimchasi.']],
   ['agreement','Elle est ___ . (serveur)',['Впиши форму женского рода.','Ayol kasb shaklini yozing.'],['serveuse'],['Serveur → serveuse.','Serveur → serveuse.']],
   ['location','Le livre est ___ la table.',['«Книга на столе» · впиши предлог.','«Kitob stol ustida» · predlogni yozing.'],['sur'],['Sur означает «на».','Sur — ustida.']],
