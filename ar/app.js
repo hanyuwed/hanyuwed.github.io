@@ -557,7 +557,7 @@ function render({ focus = false } = {}) {
   document.documentElement.lang = lang;
   document.title = 'HanyuWed · ' + t('Арабский', 'Arab tili');
   $('subtitle').textContent = t('Арабский · Manhaj A1','Arab tili · Manhaj A1');
-  $('home').textContent = t('Выбрать курс','Kurs tanlash');
+  $('home').textContent = t('Выбрать язык','Tilni tanlash');
   $('locale').setAttribute('aria-label',t('Язык интерфейса','Interfeys tili'));
   for (const item of $('locale').querySelectorAll('button')) item.setAttribute('aria-pressed',item.dataset.language===lang);
   $('navigation').setAttribute('aria-label',t('Разделы','Bo‘limlar'));
@@ -566,7 +566,7 @@ function render({ focus = false } = {}) {
     if (item.dataset.value === view) item.setAttribute('aria-current','page');
     else item.removeAttribute('aria-current');
   }
-  $('heading').textContent = view === 'units' ? t('Выбери уроки','Darslarni tanla') : t(...tabs[view]);
+  $('heading').textContent = t(...tabs[view]);
   $('content').innerHTML = views[view]();
   if (view === 'dictionary') updateDictionary();
   showStatus();

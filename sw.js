@@ -1,6 +1,6 @@
 const BASE=new URL(self.registration.scope);
 const CACHE_PREFIX=`hanyuwed:${BASE.pathname}:`;
-const CACHE=CACHE_PREFIX+'v17';
+const CACHE=CACHE_PREFIX+'v18';
 const MEDIA_CACHE='hanyuwed-media:'+BASE.pathname;
 const assetUrl=path=>new URL(path,BASE).href;
 const PAGES=new Map([
@@ -12,7 +12,7 @@ const PAGES=new Map([
   ['es','es/'],['es/','es/'],['es/index.html','es/'],
 ].map(([path,canonical])=>[new URL(path,BASE).pathname,assetUrl(canonical)]));
 const ASSETS=[
-  './','index.html','chinese.html','courses.css','courses.js','course-common.js',
+  './','index.html','chinese.html','courses.css','courses.js','course-common.js','ui.css',
   'style.css','data.js','uz-words.js','app.js?v=3','audio-player.js','pinyin-practice.js',
   'manifest.webmanifest','icon.svg','icon-192.png','icon-512.png','apple-touch-icon.png',
   'fr/','fr/index.html','fr/styles.css','fr/course-data.js','fr/grammar.js','fr/answers.js','fr/app.js?v=2','fr/audio-index.js',

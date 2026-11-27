@@ -748,7 +748,7 @@ function render() {
   document.title = t('hanyuwed — Карточки французского', 'hanyuwed — Fransuz tili kartochkalari');
   for (const button of document.querySelectorAll('[data-lang]')) button.setAttribute('aria-pressed',button.dataset.lang===lang);
   const headings = {
-    topics:[['Выбери темы.','Mavzularni tanla.'],['Можно повторять одну тему или смешать несколько.','Bir yoki bir nechta mavzuni takrorlash mumkin.']],
+    topics:[HanyuCourse.labels.units,['Можно повторять одну тему или смешать несколько.','Bir yoki bir nechta mavzuni takrorlash mumkin.']],
     cards:[VIEWS.cards,[selectionSummary(),selectionSummary()]],
     practice:[VIEWS.practice,['Введи ответ и проверь себя.','Javobni yozib, tekshir.']],
     dictionary:[VIEWS.dictionary,['Французский, русский и узбекский.','Fransuz, rus va o‘zbek tillarida.']]

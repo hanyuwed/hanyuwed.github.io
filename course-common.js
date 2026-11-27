@@ -47,6 +47,11 @@ const HanyuCourse = (() => {
     return matched.sort((a, b) => b.score - a.score).map(match => match.entry);
   }
 
+  function keepHeaderOnEntry() {
+    if (!location.hash || performance.getEntriesByType('navigation')[0]?.type === 'back_forward') return;
+    window.addEventListener('load', () => requestAnimationFrame(() => window.scrollTo(0, 0)), {once:true});
+  }
+
   function initOfflineAudio(container, paths, siteBase) {
     if (!container || !paths.length || !('caches' in window) || !('serviceWorker' in navigator)) return;
     const button = container.querySelector('button');
@@ -101,5 +106,5 @@ const HanyuCourse = (() => {
     navigator.serviceWorker.addEventListener('controllerchange', render);
   }
 
-  return Object.freeze({languageKey, labels, readLanguage, readStored, writeStored, normalizeSearch, rankedDictionary, initOfflineAudio});
+  return Object.freeze({languageKey, labels, readLanguage, readStored, writeStored, normalizeSearch, rankedDictionary, initOfflineAudio, keepHeaderOnEntry});
 })();

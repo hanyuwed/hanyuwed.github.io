@@ -8,16 +8,17 @@
   <meta property="og:description" content="282 карточки китайского: иероглифы, пиньинь, произношение, перевод на русский и узбекский.">
   <meta property="og:url" content="https://hanyuwed.github.io/chinese.html">
   <meta property="og:image" content="https://hanyuwed.github.io/icon-512.png">
+  <link rel="stylesheet" href="./ui.css">
 </head>
 <body><div class="app">
-<header><a class="brand" href="./" aria-label="hanyuwed — Карточки китайского" data-uz-aria-label="hanyuwed — Xitoy tili kartochkalari"><span class="seal" aria-hidden="true">学</span><span>hanyuwed<small data-uz="Xitoy tili kartochkalarda">Китайский по карточкам</small></span></a><div class="header-tools">
+<header><a class="brand" href="./" aria-label="HanyuWed — Карточки китайского" data-uz-aria-label="HanyuWed — Xitoy tili kartochkalari"><span class="seal" aria-hidden="true">学</span><span>HanyuWed<small data-uz="Xitoy tili kartochkalarda">Китайский по карточкам</small></span></a><div class="header-tools">
   <div class="language-switch" role="group" aria-label="Язык обучения" data-uz-aria-label="O‘rganish tili">
     <button id="languageRu" type="button" lang="ru" aria-label="Русский" aria-pressed="true">RU</button>
     <button id="languageUz" type="button" lang="uz" aria-label="O‘zbekcha" aria-pressed="false">UZ</button>
   </div>
   <button id="help" class="icon" aria-label="Как пользоваться" data-uz-aria-label="Qanday foydalaniladi?">?</button>
 </div></header>
-<main><a class="text-button" href="./" data-uz="Tilni tanlash">Выбрать язык</a><div class="intro"><span id="pageEyebrow" class="eyebrow">ТВОИ ПЕРВЫЕ СЛОВА</span><h1 id="pageTitle">Выбери юниты.</h1><p id="pageSubtitle">Одна тема или несколько — решаешь ты.</p></div>
+<main><a class="text-button" href="./" data-uz="Tilni tanlash">Выбрать язык</a><div class="intro"><h1 id="pageTitle">Уроки</h1><p id="pageSubtitle">Выбери один или несколько уроков.</p></div>
 <nav class="tabs" aria-label="Разделы" data-uz-aria-label="Bo‘limlar"><button class="active" id="unitsTab" aria-current="page" data-uz="Darslar">Уроки</button><button id="studyTab" aria-current="false" data-uz="Kartochkalar">Карточки</button><button id="pinyinTab" aria-current="false" data-uz="Pinyin">Пиньинь</button><button id="dictTab" aria-current="false"><span class="tab-label" data-uz="Lug‘at">Словарь</span> <span id="wordCount">282</span></button></nav>
 <section id="unitPicker" aria-label="Выбор юнитов" data-uz-aria-label="Dars tanlash"><p class="unit-intro" data-uz="Bir yoki bir nechta darsni belgila. Tanlangan darslarning kartochkalari aralash holda chiqadi.">Отметь один или несколько юнитов. Их карточки перемешаются в общем повторении.</p><div class="selection-tools"><button id="selectAllUnits" class="text-button" data-uz="Barchasini tanlash">Выбрать все</button><button id="clearUnits" class="text-button" data-uz="Tanlovni bekor qilish">Снять выбор</button></div><div id="unitGrid" class="unit-grid"></div><div class="selection-action"><p id="selectionSummary" role="status" aria-live="polite"></p><button id="startSelected" class="primary" data-uz="Aralashtirib takrorlash ↝">Перемешать и повторять ↝</button></div></section>
 <section id="study" hidden aria-label="Изучение слов" data-uz-aria-label="So‘zlarni o‘rganish"><div class="filters"><button id="changeUnit" class="unit-change" aria-label="Изменить выбранные юниты" data-uz-aria-label="Tanlangan darslarni o‘zgartirish"><span id="selectedUnit">Все юниты</span><span aria-hidden="true">⌄</span></button><button id="direction" class="text-button" title="Изменить направление" data-uz-title="Mashq yo‘nalishini almashtirish"><b id="directionLabel">汉 → РУ</b> <span>⇄</span></button></div>

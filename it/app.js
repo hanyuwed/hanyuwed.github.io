@@ -26,7 +26,7 @@ const progress = new Map(IT_WORDS.map(word => [word.id,saved(keys.word(word.id),
 const units = saved(keys.units,[0]);
 const chosen = new Set(Array.isArray(units) ? units.filter(n => Number.isInteger(n) && IT_UNITS[n]) : [0]);
 const views = {
-  topics: ['Юниты','Bo‘limlar'],
+  topics: HanyuCourse.labels.units,
   cards: ['Карточки','Kartochkalar'],
   practice: ['Практика','Mashqlar'],
   dictionary: ['Словарь','Lug‘at']

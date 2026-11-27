@@ -536,9 +536,9 @@ function navigate(nextView, scroll = true, writeHistory = true) {
     else button.removeAttribute('aria-current');
   }
   const headings = {
-    units:t('Выбери уроки', 'Darslarni tanla'),
+    units:t(...HanyuCourse.labels.units),
     cards:t('Карточки', 'Kartochkalar'),
-    practice:t('Проверка ответов', 'Javoblarni tekshirish'),
+    practice:t(...HanyuCourse.labels.practice),
     dictionary:t('Словарь', 'Lug‘at')
   };
   text('heading', headings[view]);
@@ -723,6 +723,7 @@ function routeFromHash() {
 window.addEventListener('hashchange', routeFromHash);
 const initialView = ['units','cards','practice','dictionary'].includes(location.hash.slice(1)) ? location.hash.slice(1) : 'units';
 if (!location.hash) history.replaceState(null, '', `#${initialView}`);
+HanyuCourse.keepHeaderOnEntry();
 navigate(initialView, false, false);
 if (!standalone && 'serviceWorker' in navigator) navigator.serviceWorker.register('../sw.js').catch(() => {});
 if (!standalone) HanyuCourse.initOfflineAudio($('offline-audio'),Object.values(KO_AUDIO),new URL('../',location.href));
