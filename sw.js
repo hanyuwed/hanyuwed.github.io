@@ -1,6 +1,6 @@
 const BASE=new URL(self.registration.scope);
 const CACHE_PREFIX=`hanyuwed:${BASE.pathname}:`;
-const CACHE=CACHE_PREFIX+'v16';
+const CACHE=CACHE_PREFIX+'v17';
 const MEDIA_CACHE='hanyuwed-media:'+BASE.pathname;
 const assetUrl=path=>new URL(path,BASE).href;
 const PAGES=new Map([
@@ -12,11 +12,11 @@ const PAGES=new Map([
   ['es','es/'],['es/','es/'],['es/index.html','es/'],
 ].map(([path,canonical])=>[new URL(path,BASE).pathname,assetUrl(canonical)]));
 const ASSETS=[
-  './','index.html','chinese.html','courses.css','courses.js',
+  './','index.html','chinese.html','courses.css','courses.js','course-common.js',
   'style.css','data.js','uz-words.js','app.js?v=3','audio-player.js','pinyin-practice.js',
   'manifest.webmanifest','icon.svg','icon-192.png','icon-512.png','apple-touch-icon.png',
-  'fr/','fr/index.html','fr/styles.css','fr/course-data.js','fr/grammar.js','fr/answers.js','fr/app.js?v=2',
-  'ko/','ko/index.html','ko/styles.css','ko/data.js','ko/answers.js','ko/app.js',
+  'fr/','fr/index.html','fr/styles.css','fr/course-data.js','fr/grammar.js','fr/answers.js','fr/app.js?v=2','fr/audio-index.js',
+  'ko/','ko/index.html','ko/styles.css','ko/data.js','ko/answers.js','ko/app.js','ko/audio-index.js',
   'ar/','ar/index.html','ar/styles.css','ar/data.js','ar/answers.js','ar/app.js?v=2','ar/speech-data.js',
   'it/','it/index.html','it/styles.css','it/course-data.js','it/grammar.js','it/answers.js','it/audio-index.js','it/app.js',
   'es/','es/index.html','es/styles.css','es/course-data.js','es/grammar.js','es/answers.js','es/audio-index.js','es/app.js',

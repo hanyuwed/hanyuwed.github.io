@@ -1,6 +1,6 @@
 'use strict';
 
-const languageKey = 'hanyu-language-v1';
+const {languageKey, readLanguage, readStored:saved, writeStored} = HanyuCourse;
 const prefix = 'hanyuwed:es:';
 const keys = {deck: prefix + 'deck:v1', units: prefix + 'units:v1', session: prefix + 'session:v1', practiceLimit: prefix + 'practice-limit:v1', word: id => prefix + 'progress:v1:' + id};
 const $ = id => document.getElementById(id);
@@ -9,19 +9,8 @@ const esc = value => String(value ?? '').replace(/[&<>"']/g, c => ({
   '&':'&amp;', '<':'&lt;', '>':'&gt;', '"':'&quot;', "'":'&#39;'
 }[c]));
 
-function saved(key, fallback) {
-  try { return JSON.parse(localStorage.getItem(key)) ?? fallback; }
-  catch { return fallback; }
-}
-
 function write(key, value) {
-  try { localStorage.setItem(key, JSON.stringify(value)); }
-  catch { storageWarning(); }
-}
-
-function readLanguage() {
-  try { return localStorage.getItem(languageKey) === 'uz' ? 'uz' : 'ru'; }
-  catch { return 'ru'; }
+  if (!writeStored(key,value)) storageWarning();
 }
 
 function storageWarning() {
@@ -259,7 +248,8 @@ function render() {
   }
   $('heading').textContent = t(...views[view]);
   $('navigation').innerHTML = Object.entries(views).map(([id,names]) =>
-    button(t(...names),'route',id,'',id === view ? 'aria-current="page"' : '')).join('');
+    button(t(...(HanyuCourse.labels[id === 'topics' ? 'units' : id] || names)),
+      'route',id,'',id === view ? 'aria-current="page"' : '')).join('');
   $('audio-status').textContent = '';
   content.innerHTML = ({topics:renderTopics,cards:renderCards,practice:renderPractice,materials:renderMaterials,dictionary:renderDictionary})[view]();
 }
@@ -604,17 +594,14 @@ function renderDictionary() {
 }
 
 function dictionaryRows() {
-  const find = spanishSearch(query).replaceAll('ё','е');
-  const rows = vocabulary.filter(word => {
+  const scope = vocabulary.filter(word => {
     if ((dictHard && progress.get(word.id) !== 'hard') ||
         (dictUnit !== 'all' && !word.sources.some(source => source.unit === Number(dictUnit)))) return false;
-    return [word.es,word.ru,word.uz,word.bare].some(
-      text => text && spanishSearch(text).replaceAll('ё','е').includes(find));
+    return true;
   });
+  const rows = HanyuCourse.rankedDictionary(scope, query,
+    word => [word.es,word.ru,word.uz,word.bare,...(word.aliases || [])],spanishSearch);
   if (!rows.length) return '<p>' + t('Слова не найдены.','So‘z topilmadi.') + '</p>' + btn('Сбросить фильтры','Filtrlarni tozalash','dict-reset');
-  const exact = spanishSpelling(query);
-  const matchScore = word => [word.es,word.bare].some(text => text && spanishSpelling(text) === exact);
-  if (find) rows.sort((a,b) => Number(matchScore(b)) - Number(matchScore(a)));
   return '<p class="meta">' + t('Найдено · ','Topildi · ') + rows.length + '</p>' +
     rows.slice(0,dictLimit).map(word => {
       const sourceUnits = [...new Set(word.sources.map(source => source.unit + 1))].join(', ');

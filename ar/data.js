@@ -62,7 +62,7 @@ export const units = [
 ];
 
 export const entries = [
-  {"id": "u01-p03-w01", "ar": "مَرْحَبًا", "ru": ["привет", "здравствуйте"], "uz": ["salom", "xush kelibsiz"], "kind": "word", "units": [1], "sources": ["u01-p03-w01"]},
+  {"id": "u01-p03-w01", "ar": "مَرْحَبًا", "ru": ["привет", "здравствуйте"], "uz": ["salom"], "kind": "word", "units": [1], "sources": ["u01-p03-w01"]},
   {"id": "u01-p03-w02", "ar": "جَامِعَة", "ru": ["университет"], "uz": ["Universitet"], "kind": "word", "units": [1, 3], "sources": ["u01-p03-w02", "u03-p05-w13"]},
   {"id": "u01-p03-w03", "ar": "طَالِبَة", "ru": ["студентка"], "uz": ["Talaba qiz"], "kind": "word", "units": [1], "sources": ["u01-p03-w03"]},
   {"id": "u01-p03-w04", "ar": "مَدِينَة", "ru": ["город"], "uz": ["Shahar"], "kind": "word", "units": [1], "sources": ["u01-p03-w04"]},
@@ -356,7 +356,7 @@ export const entries = [
   {"id": "u12-p18-w18", "ar": "أَغْتَسِلُ", "ru": ["я моюсь", "я принимаю душ"], "uz": ["dush qilaman", "cho‘milaman"], "kind": "word", "units": [12], "sources": ["u12-p18-w18"]},
   {"id": "u12-p18-e01", "ar": "فِي الْخَارِجِ", "ru": ["снаружи", "на улице"], "uz": ["Tashqarida", "ko‘chada"], "kind": "phrase", "units": [12], "sources": ["u12-p18-e01"]},
   {"id": "u12-p18-e02", "ar": "كُلَّ يَوْمٍ", "ru": ["каждый день", "ежедневно"], "uz": ["Har kuni"], "kind": "phrase", "units": [12], "sources": ["u12-p18-e02"]},
-  {"id": "u12-p18-e03", "ar": "شُرُوقُ الشَّمْسِ", "ru": ["восход солнца", "восход"], "uz": ["Quyosh chiqishi", "tong qorachig‘i"], "kind": "phrase", "units": [12], "sources": ["u12-p18-e03"]},
+  {"id": "u12-p18-e03", "ar": "شُرُوقُ الشَّمْسِ", "ru": ["восход солнца", "восход"], "uz": ["Quyosh chiqishi", "quyoshning chiqishi"], "kind": "phrase", "units": [12], "sources": ["u12-p18-e03"]},
   {"id": "u12-p18-e04", "ar": "ارْتِدَاءُ الْمَلَابِسِ", "ru": ["одевание", "надевание одежды"], "uz": ["Kiyim kiyish"], "kind": "phrase", "units": [12], "sources": ["u12-p18-e04"]},
   {"id": "u12-p18-e05", "ar": "أُمُورُ الْحَيَاةِ", "ru": ["жизненные дела", "повседневные дела"], "uz": ["Hayot ishlari", "kundalik turmush"], "kind": "phrase", "units": [12], "sources": ["u12-p18-e05"]},
   {"id": "u12-p18-e06", "ar": "عُطْلَة سَعِيدَة", "ru": ["приятного отдыха", "хороших каникул"], "uz": ["Yoqimli ta‘til", "baxtli dam olish"], "kind": "phrase", "units": [12], "sources": ["u12-p18-e06"]},

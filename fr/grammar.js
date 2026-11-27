@@ -4,6 +4,23 @@ const AUXILIARIES = {
   avoir: ['ai', 'as', 'a', 'avons', 'avez', 'ont'],
   être: ['suis', 'es', 'est', 'sommes', 'êtes', 'sont']
 };
+const PAST_SUBJECTS = [
+  {person:'je', gender:'m', plural:false, hint:['Говорит мужчина.','Erkak kishi gapiryapti.']},
+  {person:'je', gender:'f', plural:false, hint:['Говорит женщина.','Ayol kishi gapiryapti.']},
+  {person:'tu', gender:'m', plural:false, hint:['Обращение к мужчине.','Erkak kishiga murojaat.']},
+  {person:'tu', gender:'f', plural:false, hint:['Обращение к женщине.','Ayol kishiga murojaat.']},
+  {person:'il', gender:'m', plural:false},
+  {person:'elle', gender:'f', plural:false},
+  {person:'on', gender:'m', plural:false, hint:['On обозначает людей вообще.','On umumiy ma’noda, aniq shaxsni bildirmaydi.']},
+  {person:'nous', gender:'m', plural:true, hint:['Группа мужчин или смешанная группа.','Erkaklar yoki aralash guruh.']},
+  {person:'nous', gender:'f', plural:true, hint:['Группа женщин.','Ayollar guruhi.']},
+  {person:'vous', gender:'m', plural:false, hint:['Вежливое обращение к одному мужчине.','Bitta erkak kishiga hurmat bilan murojaat.']},
+  {person:'vous', gender:'f', plural:false, hint:['Вежливое обращение к одной женщине.','Bitta ayol kishiga hurmat bilan murojaat.']},
+  {person:'vous', gender:'m', plural:true, hint:['Обращение к группе мужчин или смешанной группе.','Erkaklar yoki aralash guruhga murojaat.']},
+  {person:'vous', gender:'f', plural:true, hint:['Обращение к группе женщин.','Ayollar guruhiga murojaat.']},
+  {person:'ils', gender:'m', plural:true},
+  {person:'elles', gender:'f', plural:true}
+];
 
 function requiresElision(text) {
   // Only h muet occurs at the start of these conjugated verbs.
@@ -14,9 +31,9 @@ function subjectPhrase(subject, verb) {
   return subject === 'je' && requiresElision(verb) ? 'j’' + verb : subject + ' ' + verb;
 }
 
-function negation(subject, verb) {
-  return subject + (requiresElision(verb) ? ' n’' : ' ne ') + verb + ' pas';
-}
+const negativeForm = verb => (requiresElision(verb) ? 'n’' : 'ne ') + verb + ' pas';
+
+const negation = (subject, verb) => subject + ' ' + negativeForm(verb);
 
 function question(phrase) {
   return (requiresElision(phrase) ? 'est-ce qu’' : 'est-ce que ') + phrase + ' ?';
@@ -64,36 +81,44 @@ const PAST_CONTEXT = {
   avoir:'un bon accueil', être:'en retard'
 };
 
-function pastExercise(entry, subject, person, gender, plural, mode) {
+function pastExercise(entry, {person,gender,plural,hint}, mode) {
   const aux = AUXILIARIES[entry.aux][PERSON_INDEX[person]];
-  const extra = entry.aux === 'être' ? (gender === 'f' ? 'e' : '') + (plural ? 's' : '') : '';
+  const agrees = entry.aux === 'être';
+  const extra = agrees ? (gender === 'f' ? 'e' : '') + (plural ? 's' : '') : '';
   const participle = entry.participle + extra;
   const context = PAST_CONTEXT[entry.verb];
-  const base = {fr:true,id:'pc-' + entry.verb + '-' + subject + '-' + mode, note:entry.verb};
+  const subjectId = agrees ? person + '-' + gender + (plural ? 'p' : 's') : person;
+  const base = {fr:true,promptFr:true,id:'pc-' + entry.verb + '-' + subjectId + '-' + mode, note:entry.verb};
   if (mode === 'participle') return {
     ...base,id:'pc-pp-' + entry.verb,title:entry.verb,
-    label:['Впиши базовую форму participe passé.', 'Participe passé ning asosiy shaklini yozing.'],
+    label:['Впиши базовую форму причастия прошедшего времени.', 'O‘tgan zamon sifatdoshining asosiy shaklini yoz.'],
     accepted:[entry.participle],
-    rule:['После вспомогательного глагола нужна форма participe passé.', 'Yordamchi fe’ldan keyin participe passé ishlatiladi.']
+    rule:['После вспомогательного глагола нужно причастие прошедшего времени.', 'Yordamchi fe’ldan keyin o‘tgan zamon sifatdoshi ishlatiladi.']
   };
-  const expected = mode === 'aux' ? aux : mode === 'agreement' ? participle : aux + ' ' + participle;
-  const blanks = {full:'___', aux:'___ ' + participle, agreement:aux + ' ___'};
+  const negative = mode === 'negative';
+  const expected = mode === 'aux' ? aux : mode === 'agreement' ? participle :
+    (negative ? negativeForm(aux) : aux) + ' ' + participle;
+  const subjectBlank = person === 'je' && !negative && requiresElision(aux) ? 'J’___' : capitalize(person) + ' ___';
+  const blanks = {full:subjectBlank, aux:subjectBlank + ' ' + participle,
+    agreement:capitalize(subjectPhrase(person,aux)) + ' ___', negative:subjectBlank};
+  const solved = negative ? negation(person,aux) : subjectPhrase(person,aux);
   return {
-    ...base,title:subject + ' ' + blanks[mode] + ' ' + context + '.',
-    accepted:[expected],
+    ...base,title:blanks[mode] + ' ' + context + '.', hint:agrees ? hint : undefined,
+    accepted:[expected], negative, elision:negative,
     label:{
-      full:['Впиши обе части passé composé.', 'Passé composé shaklining ikkala qismini yozing.'],
-      aux:['Впиши вспомогательный глагол.', 'Yordamchi fe’lni yozing.'],
-      agreement:['Впиши причастие с нужным согласованием.', 'Participe passé ni mos shaklda yozing.']
+      full:['Впиши обе части passé composé.', 'Passé composé shaklining ikkala qismini yoz.'],
+      aux:['Впиши вспомогательный глагол.', 'Yordamchi fe’lni yoz.'],
+      agreement:['Впиши причастие, согласованное с подлежащим.', 'Sifatdoshni egaga moslab yoz.'],
+      negative:['Впиши отрицательную форму с ne/n’ и pas.', 'Ne/n’ va pas bilan inkor shaklini yoz.']
     }[mode],
     aux,
     participle,
     grammarMode:mode,
-    rule:entry.aux === 'être' ?
-      ['Здесь используется être. Подлежащее «' + subject + '» требует формы ' + participle + '.',
-       'Bu gapda être ishlatiladi. «' + subject + '» egasiga ' + participle + ' shakli mos keladi.'] :
-      ['Здесь используется avoir. В этом предложении причастие сохраняет базовую форму.', 'Bu gapda avoir ishlatiladi. Bu gapda participe passé asosiy shaklda qoladi.'],
-    solution:subject + ' ' + aux + ' ' + participle + ' ' + context + '.'
+    rule:agrees ?
+      ['Здесь используется être. Согласуй причастие с подлежащим. В этом примере нужна форма ' + participle + '.',
+       'Bu gapda être ishlatiladi. Sifatdosh ega bilan moslashadi. Bu misolda ' + participle + ' shakli kerak.'] :
+      ['Здесь используется avoir. В этом предложении причастие сохраняет базовую форму.', 'Bu gapda avoir ishlatiladi va sifatdosh asosiy shaklda qoladi.'],
+    solution:capitalize(solved) + ' ' + participle + ' ' + context + '.'
   };
 }
 
@@ -107,7 +132,7 @@ const CONTEXT_EXERCISES = [
   ['agreement','un ___ appartement (beau)',['Согласуй прилагательное.','Sifatni mos shaklda yozing.'],['bel'],['Перед гласной в мужском роде используется bel.','Erkak rodida unli oldidan bel ishlatiladi.']],
   ['agreement','une ___ maison (beau)',['Согласуй прилагательное.','Sifatni mos shaklda yozing.'],['belle'],['Maison — женский род.','Maison — ayol jinsi.']],
   ['agreement','La cuisine est ___ . (équipé)',['Согласуй прилагательное.','Sifatni mos shaklda yozing.'],['équipée'],['Cuisine — женский род, единственное число.','Cuisine — ayol jinsi, birlik.']],
-  ['agreement','Paul et Marc sont ___ . (content)',['Согласуй прилагательное.','Sifatni mos shaklda yozing.'],['contents'],['Два человека, мужской род: окончание -s.','Ikki kishi, masculin: -s qo‘shimchasi.']],
+  ['agreement','Paul et Marc sont ___ . (content)',['Согласуй прилагательное.','Sifatni mos shaklda yozing.'],['contents'],['Два человека. Для мужского рода во множественном числе добавь -s.','Ikki kishi. Erkak jinsidagi ko‘plik shakli uchun -s qo‘sh.']],
   ['agreement','Elle est ___ . (serveur)',['Впиши форму женского рода.','Ayol kasb shaklini yozing.'],['serveuse'],['Serveur → serveuse.','Serveur → serveuse.']],
   ['location','Le livre est ___ la table.',['«Книга на столе» · впиши предлог.','«Kitob stol ustida» · predlogni yozing.'],['sur'],['Sur означает «на».','Sur — ustida.']],
   ['location','Le sac est ___ la chaise.',['«Сумка под стулом» · впиши предлог.','«Sumka stul ostida» · predlogni yozing.'],['sous'],['Sous означает «под».','Sous — ostida.']],

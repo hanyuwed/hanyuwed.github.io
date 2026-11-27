@@ -6,8 +6,9 @@ const $ = id => document.getElementById(id);
 const byId = new Map(entries.map(entry => [entry.id, entry]));
 const solo = document.documentElement.hasAttribute('data-standalone');
 const prefix = solo ? 'hanyuwed:ar:preview:' : 'hanyuwed:ar:manhaj-a1:';
-const languageKey = solo ? prefix + 'language' : 'hanyu-language-v1';
+const languageKey = solo ? prefix + 'language' : HanyuCourse.languageKey;
 const settingsKey = prefix + 'settings:v1';
+const studyKey = prefix + 'study:v1';
 const markKey = id => prefix + 'marks:v1:' + id;
 const unitIds = units.map((_, index) => index + 1);
 let memoryOnly = false;
@@ -28,8 +29,8 @@ function readSettings() {
 let lang = read(languageKey) === 'uz' ? 'uz' : 'ru';
 const t = (ru, uz) => lang === 'uz' ? uz : ru;
 const tabs = {
-  units: ['Уроки','Darslar'], alphabet: ['Чтение','O‘qish'], cards: ['Карточки','Kartochkalar'],
-  practice: ['Практика','Mashqlar'], dictionary: ['Словарь','Lug‘at']
+  units: HanyuCourse.labels.units, alphabet: ['Чтение','O‘qish'], cards: HanyuCourse.labels.cards,
+  practice: HanyuCourse.labels.practice, dictionary: HanyuCourse.labels.dictionary
 };
 const modes = {
   choice: ['Выбрать перевод','Tarjimani tanlash'], meaning: ['Написать перевод','Tarjima yozish'],
@@ -472,15 +473,14 @@ function answerQuestion(question, result) {
 }
 
 function dictionaryResults() {
-  const raw = cleanTranslation(search);
-  const ar = searchArabic(search);
-  return entries.filter(entry => {
+  const scope = entries.filter(entry => {
     if (filterUnit && !entry.units.includes(filterUnit)) return false;
     if (filterKind !== 'all' && entry.kind !== filterKind) return false;
     if (filterHard && marks.get(entry.id) !== 'hard') return false;
-    return !raw || (ar && searchArabic(entry.ar).includes(ar)) ||
-      ['ru','uz'].some(language => entry[language].some(text => cleanTranslation(text).includes(raw)));
+    return true;
   });
+  const normalize = /\p{Script=Arabic}/u.test(search) ? searchArabic : HanyuCourse.normalizeSearch;
+  return HanyuCourse.rankedDictionary(scope, search, entry => [entry.ar,...entry.ru,...entry.uz], normalize);
 }
 function updateDictionary() {
   const results = dictionaryResults();
@@ -599,6 +599,33 @@ function resetPools() {
   deck = null;
   practices.clear();
   storeSettings();
+  saveStudy();
+}
+
+function saveStudy() {
+  const cards = deck ? {...deck, revealed:[...deck.revealed]} : null;
+  const sessions = Object.fromEntries([...practices].map(([language, session]) => [language, {
+    ...session, queue:session.queue.map(question => ({...question, entry:question.entry.id}))
+  }]));
+  if (!HanyuCourse.writeStored(studyKey, {units:[...selected], kind, cards, sessions})) memoryOnly = true;
+}
+
+function restoreStudy() {
+  const stored = HanyuCourse.readStored(studyKey);
+  if (!stored || !Array.isArray(stored.units) || stored.units.join() !== [...selected].join() || stored.kind !== kind) return;
+  const {cards, sessions} = stored;
+  if (Array.isArray(cards?.queue) && cards.queue.every(id => byId.has(id)) && Array.isArray(cards.revealed) &&
+      Number.isInteger(cards.index) && cards.index >= 0 && cards.index <= cards.queue.length) {
+    deck = {...cards, revealed:new Set(cards.revealed)};
+  }
+  for (const language of ['ru','uz']) {
+    const session = sessions?.[language];
+    if (!session || !Object.hasOwn(modes,session.mode) || !Array.isArray(session.queue) ||
+        !Number.isInteger(session.index) || session.index < 0 || session.index > session.queue.length ||
+        !session.queue.every(question => byId.has(question?.entry) && Array.isArray(question.chips) &&
+          Array.isArray(question.parts) && Array.isArray(question.options) && typeof question.draft === 'string')) continue;
+    practices.set(language, {...session,queue:session.queue.map(question => ({...question,entry:byId.get(question.entry)}))});
+  }
 }
 
 $('navigation').innerHTML = Object.keys(tabs).map(key => button('', 'view', {value:key})).join('');
@@ -624,6 +651,7 @@ document.addEventListener('click', event => {
   if (action === 'play-question' && question) {
     return playAudio(question.entry.id,() => {
       question.heard = true;
+      saveStudy();
       const check = $('content').querySelector('[data-action=check]');
       if (check) check.disabled = false;
     });
@@ -654,6 +682,7 @@ document.addEventListener('click', event => {
     resetPools();
   } else if (action === 'start-cards' || action === 'hard-cards' || action === 'all-cards') {
     startDeck(action === 'hard-cards');
+    saveStudy();
     return changeView('cards');
   } else if (['card-to-translation','card-to-arabic','toggle-marks'].includes(action)) {
     if (action === 'toggle-marks') decorated = !decorated;
@@ -687,6 +716,7 @@ document.addEventListener('click', event => {
       if (field.selectionStart === 0) return field.focus();
       field.setRangeText(value,field.selectionStart,field.selectionStart,'end');
       question.draft = field.value;
+      saveStudy();
       return field.focus();
     } else if (!answerQuestion(question,action)) {
       const feedback = $('feedback');
@@ -705,6 +735,7 @@ document.addEventListener('click', event => {
     } else $('search').focus();
     return;
   }
+  if (view === 'cards' || view === 'practice') saveStudy();
   render();
   if (['check','hint','skip'].includes(action)) $('content').querySelector('[data-action=next-question]')?.focus();
   if (['prev-question','next-question','start-practice','retry-practice'].includes(action))
@@ -722,11 +753,13 @@ document.addEventListener('change', event => {
     mode = value;
     practices.clear();
     storeSettings();
+    saveStudy();
   } else if (id === 'size') {
     stopAudio();
     size = Number(value);
     practices.clear();
     storeSettings();
+    saveStudy();
   } else if (id === 'filter-unit') filterUnit = Number(value);
   else if (id === 'filter-kind') filterKind = value;
   else return;
@@ -741,6 +774,7 @@ document.addEventListener('input', event => {
     const q = practice()?.queue[practice()?.index];
     if (q && q.result === null) {
       q.draft = event.target.value;
+      saveStudy();
       $('feedback').textContent = '';
     }
   }
@@ -768,6 +802,7 @@ window.addEventListener('pageshow', () => {
 window.addEventListener('popstate',applyLocation);
 window.addEventListener('hashchange',applyLocation);
 window.addEventListener('pagehide',stopAudio);
+restoreStudy();
 applyLocation();
 render();
 if (!solo && 'serviceWorker' in navigator) navigator.serviceWorker.register('../sw.js').catch(() => {});

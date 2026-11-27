@@ -1,12 +1,15 @@
 import {entries, units} from './data.js';
 import {contextTasks, evaluate, forSearch, numberTasks, spellingTask} from './answers.js';
+import {KO_AUDIO} from './audio-index.js';
 
 const $ = id => document.getElementById(id);
 const allUnitIds = units.map((_, index) => index + 1);
 const standalone = document.documentElement.hasAttribute('data-standalone');
 const prefix = standalone ? 'hanyuwed:ko:preview:' : 'hanyuwed:ko:snu1a:';
 const settingsKey = prefix + 'settings:v1';
-const languageKey = standalone ? prefix + 'language' : 'hanyu-language-v1';
+const cardsKey = prefix + 'cards:v1';
+const practiceKey = prefix + 'practice:v1';
+const languageKey = standalone ? prefix + 'language' : HanyuCourse.languageKey;
 const markKey = id => prefix + 'marks:v1:' + id;
 const legacyKey = 'hanyuwed-ko-snu1a-v1';
 
@@ -51,6 +54,7 @@ let showReading = false;
 let cards = null;
 let practiceDirection = 'hangul';
 let practice = null;
+const practiceControls = ['practice-mode', 'practice-limit', 'number-kind'];
 
 const t = (ru, uz) => language === 'uz' ? uz : ru;
 const nameFor = id => t(units[id - 1][1], units[id - 1][2]);
@@ -82,6 +86,7 @@ function setProgress(id, value, total) {
   $(id).value = value;
 }
 let statusTimer;
+let activeRecording;
 function status(message) {
   clearTimeout(statusTimer);
   text('status', message);
@@ -89,19 +94,20 @@ function status(message) {
   if (message) statusTimer = setTimeout(() => status(''), 5000);
 }
 function stopAudio() {
+  activeRecording?.pause();
+  activeRecording = null;
   window.speechSynthesis?.cancel();
   status('');
 }
 function koreanVoice() {
   return window.speechSynthesis?.getVoices().find(item => /^ko(?:[-_]|$)/i.test(item.lang));
 }
-function speak(ko) {
+function speakWithVoice(ko) {
   const voice = koreanVoice();
   if (!voice || !window.SpeechSynthesisUtterance) {
     status(t('Для озвучки добавь корейский голос в настройках устройства.', 'Tinglash uchun qurilma sozlamalarida koreyscha ovozni qo‘sh.'));
     return;
   }
-  stopAudio();
   const utterance = new SpeechSynthesisUtterance(ko);
   utterance.voice = voice;
   utterance.lang = voice.lang;
@@ -112,6 +118,34 @@ function speak(ko) {
     }
   };
   window.speechSynthesis.speak(utterance);
+}
+function speak(ko) {
+  stopAudio();
+  const path = KO_AUDIO[ko.trim()];
+  if (!path) {
+    speakWithVoice(ko);
+    return;
+  }
+  const recording = new Audio(new URL(path, import.meta.url).href);
+  activeRecording = recording;
+  status(t('Загружается запись…','Audio yuklanmoqda…'));
+  recording.onended = () => {
+    if (activeRecording !== recording) return;
+    activeRecording = null;
+    status('');
+  };
+  recording.play().then(() => {
+    if (activeRecording === recording) status(t('Воспроизведение…','Ijro etilmoqda…'));
+  }).catch(() => {
+    if (activeRecording !== recording) return;
+    activeRecording = null;
+    if (koreanVoice() && window.SpeechSynthesisUtterance) {
+      speakWithVoice(ko);
+      return;
+    }
+    status(t('Запись не загрузилась. Проверь подключение к интернету и попробуй снова.',
+      'Audio yuklanmadi. Internetga ulanishni tekshir va qayta urinib ko‘r.'));
+  });
 }
 window.speechSynthesis?.addEventListener('voiceschanged', () => {
   if (view === 'practice' && $('practice-mode').value === 'dictation') renderPractice();
@@ -140,6 +174,8 @@ function updateSelection(ids, focusId) {
   cards = practice = null;
   cardMode = 'all';
   save(settingsKey, JSON.stringify([...selected]));
+  persistCards();
+  persistPractice();
   navigate('units', false);
   if (focusId) $(`unit-${focusId}`).focus({preventScroll:true});
 }
@@ -172,11 +208,48 @@ function renderUnits() {
     : t('Выбери хотя бы один раздел', 'Kamida bitta bo‘limni tanla'));
   $('select-all').disabled = selected.size === units.length;
   $('clear-units').disabled = $('start').disabled = !selected.size;
+  text('start', cards?.queue[cards.index] && cardMode === 'all'
+    ? t('Продолжить карточки', 'Kartochkalarni davom ettirish')
+    : t('Начать карточки', 'Kartochkalarni boshlash'));
 }
 
+function selectedSignature() {
+  return allUnitIds.filter(id => selected.has(id)).join(',');
+}
+function clearSession(key) {
+  try { localStorage.removeItem(key); } catch {}
+}
+function persistCards() {
+  if (!cards) return clearSession(cardsKey);
+  save(cardsKey, JSON.stringify({
+    selection:selectedSignature(),
+    mode:cardMode,
+    reverse:cardReverse,
+    reading:showReading,
+    revealed:cards.revealed,
+    queue:cards.queue.map(word => word.id),
+    index:cards.index
+  }));
+}
+function restoreCards() {
+  const session = json(cardsKey);
+  if (session?.selection !== selectedSignature() || !Array.isArray(session.queue) ||
+      !['all','hard'].includes(session.mode) || !validPosition(session.index, session.queue.length)) return;
+  const words = new Map(chosen().map(word => [word.id, word]));
+  const queue = session.queue.map(id => words.get(id));
+  if (queue.some(word => !word)) return;
+  cardMode = session.mode;
+  cardReverse = session.reverse === true;
+  showReading = session.reading === true;
+  cards = {queue,index:session.index,revealed:session.revealed === true};
+}
+function validPosition(index, length) {
+  return Number.isInteger(index) && index >= 0 && index <= length;
+}
 function newCards() {
   const list = chosen().filter(word => cardMode === 'all' || marks.get(word.id) === 'hard');
   cards = {queue:randomOrder(list), index:0, revealed:false};
+  persistCards();
 }
 function renderCards() {
   if (!cards) newCards();
@@ -226,6 +299,7 @@ function moveCard(offset, grade) {
   stopAudio();
   cards.index += offset;
   cards.revealed = false;
+  persistCards();
   renderCards();
   (cards.queue[cards.index] ? $('flash') : $('repeat-all')).focus({preventScroll:true});
 }
@@ -262,7 +336,8 @@ const instructions = {
   letters:['Запиши полностью хангылем.', 'To‘liq hangulda yoz.'],
   digits:['Запиши цифрами с 년, 월 или 일.', 'Raqamlar bilan yoz va 년, 월 yoki 일 qo‘sh.'],
   particle:['Впиши только частицу.', 'Faqat yuklamani yoz.'],
-  verb:['Впиши глагол в словарной форме на -다.', 'Fe’lni lug‘atdagi -다 shaklida yoz.']
+  verb:['Впиши глагол в словарной форме на -다.', 'Fe’lni lug‘atdagi -다 shaklida yoz.'],
+  form:['Заполни пропуск.', 'Bo‘sh joyni to‘ldir.']
 };
 let composing = false;
 let compositionJustEnded = false;
@@ -270,28 +345,71 @@ let compositionJustEnded = false;
 function currentTask() {
   return practice.queue[practice.index];
 }
-function newPractice(queue) {
+function practiceTasks() {
   const mode = $('practice-mode').value;
   const words = chosen();
+  if (mode === 'context') return contextTasks(selected);
+  if (mode === 'numbers') return numberTasks(words, language, $('number-kind').value, entries);
+  const type = mode === 'meaning' && practiceDirection === 'translation' ? 'translation' : mode;
+  return words.map(word => spellingTask(word, language, type));
+}
+function taskKey(task) {
+  return task.contextual ? task.prompt : `${task.word.id}:${task.type}`;
+}
+function persistPractice() {
+  if (!practice) return clearSession(practiceKey);
+  save(practiceKey, JSON.stringify({
+    selection:selectedSignature(),
+    controls:practiceControls.map(id => $(id).value),
+    direction:practiceDirection,
+    locale:language,
+    queue:practice.queue.map(taskKey),
+    index:practice.index,
+    outcomes:practice.report.map(item => item.outcome),
+    result:practice.result,
+    hadMistake:practice.hadMistake,
+    completed:practice.completed,
+    draft:$('answer').value
+  }));
+}
+function restorePractice() {
+  const session = json(practiceKey);
+  if (session?.selection !== selectedSignature() || !Array.isArray(session.queue) ||
+      !validPosition(session.index, session.queue.length) || !Array.isArray(session.outcomes) ||
+      !Array.isArray(session.controls) || session.controls.length !== practiceControls.length) return;
+  practiceControls.forEach((id, index) => {
+    if ([...$(id).options].some(option => option.value === session.controls[index])) $(id).value = session.controls[index];
+  });
+  practiceDirection = session.direction === 'translation' ? 'translation' : 'hangul';
+  const tasks = new Map(practiceTasks().map(task => [taskKey(task), task]));
+  const queue = session.queue.map(key => tasks.get(key));
+  const completed = session.completed === true && session.index < queue.length;
+  if (queue.some(task => !task) || session.outcomes.length !== session.index + Number(completed) ||
+      session.outcomes.some(outcome => !['first','fixed','shown'].includes(outcome))) return;
+  const staleTranslation = session.locale !== language && queue[session.index]?.reverse && !completed;
+  practice = {
+    queue,index:session.index,completed,
+    report:session.outcomes.map((outcome,index) => ({task:queue[index],outcome})),
+    result:!staleTranslation && (session.result === 'context' || Object.hasOwn(feedbackMessages,session.result)) ? session.result : '',
+    hadMistake:!staleTranslation && session.hadMistake === true
+  };
+  $('answer').value = !staleTranslation && typeof session.draft === 'string' ? session.draft : '';
+}
+function newPractice(queue) {
   if (!queue) {
-    if (mode === 'context') queue = contextTasks(selected);
-    else if (mode === 'numbers') queue = numberTasks(words, language, $('number-kind').value, entries);
-    else {
-      const type = mode === 'meaning' && practiceDirection === 'translation' ? 'translation' : mode;
-      queue = words.map(word => spellingTask(word, language, type));
-    }
-    queue = randomOrder(queue);
+    queue = randomOrder(practiceTasks());
     if ($('practice-limit').value === '10') queue = queue.slice(0, 10);
   }
   practice = {queue, index:0, report:[], result:'', hadMistake:false, completed:false};
   $('answer').value = '';
+  persistPractice();
 }
 
 function renderPractice() {
   if (!practice) newPractice();
   const mode = $('practice-mode').value;
   const task = currentTask();
-  const voiceAvailable = mode !== 'dictation' || Boolean(koreanVoice());
+  const voiceAvailable = mode !== 'dictation' || !task || Object.hasOwn(KO_AUDIO,task.audio.trim()) || Boolean(koreanVoice());
   text('to-hangul', t('Вводить хангыль', 'Hangul yozish'));
   text('to-translation', t('Вводить перевод', 'Tarjimani yozish'));
   pressed($('to-hangul'), practiceDirection === 'hangul');
@@ -327,11 +445,13 @@ function renderPractice() {
   show('prompt', Boolean(task.prompt));
   show('listen-question', Boolean(task.audio));
   $('answer').lang = task.reverse ? language : 'ko';
-  text('answer-label', t(ru,uz));
+  text('answer-label', task.instruction?.[language] ?? t(ru,uz));
   $('answer').readOnly = practice.completed;
   const result = practice.result;
   const translated = feedbackMessages[result];
-  text('feedback', result === 'context' ? task.hint[language] : translated ? t(...translated) : '');
+  const message = translated ? t(...translated) : '';
+  const explanation = task.contextual && (result === 'context' || practice.completed) ? task.hint[language] : '';
+  text('feedback', [message,explanation].filter(Boolean).join(' '));
   $('feedback').dataset.tone = result === 'shown' ? 'shown' : practice.completed ? 'good' : result ? 'bad' : '';
   const showSolution = ['shown','meaning-spacing'].includes(result);
   text('solution', showSolution ? task.accepted.slice(0, 4).join(' · ') : '');
@@ -345,6 +465,7 @@ function renderPractice() {
 function finishAnswer(outcome) {
   practice.completed = true;
   practice.report.push({task:currentTask(),outcome});
+  persistPractice();
   renderPractice();
   $('next-question').focus();
 }
@@ -359,6 +480,7 @@ function checkAnswer() {
     return;
   }
   if (result !== 'empty') practice.hadMistake = true;
+  persistPractice();
   renderPractice();
   $('answer').focus();
 }
@@ -370,8 +492,8 @@ function restartPractice() {
 }
 
 function renderDictionary() {
-  const search = forSearch($('search').value);
-  const list = chosen().filter(word => [word.hangul, word.reading, word.ru, word.uz, ...word.forms].some(value => forSearch(value).includes(search)));
+  const list = HanyuCourse.rankedDictionary(chosen(), $('search').value,
+    word => [word.hangul,word.reading,word.ru,word.uz,...word.forms], forSearch);
   text('search-count', t(`Найдено ${list.length} из ${chosen().length}`, `${chosen().length} tadan ${list.length} ta topildi`));
   const fragment = document.createDocumentFragment();
   for (const word of list) {
@@ -426,7 +548,10 @@ function navigate(nextView, scroll = true, writeHistory = true) {
   if (scroll) window.scrollTo(0, 0);
 }
 
-for (const button of navigation) button.onclick = () => navigate(button.dataset.view);
+for (const button of navigation) button.onclick = () => {
+  navigate(button.dataset.view);
+  $('heading').focus({preventScroll:true});
+};
 function changeLanguage(next) {
   if (next === language) return;
   language = next;
@@ -441,7 +566,9 @@ function changeLanguage(next) {
     if (!practice.completed && currentTask()?.reverse) {
       $('answer').value = '';
       practice.result = '';
+      practice.hadMistake = false;
     }
+    persistPractice();
   }
   localize();
   navigate(view, false);
@@ -470,12 +597,33 @@ window.addEventListener('storage', event => {
 
 $('select-all').onclick = () => updateSelection(allUnitIds);
 $('clear-units').onclick = () => updateSelection([]);
-$('start').onclick = () => { cardMode = 'all'; newCards(); navigate('cards'); };
-$('card-direction').onclick = () => { cardReverse = !cardReverse; cards.revealed = false; stopAudio(); renderCards(); };
-$('toggle-reading').onclick = () => { showReading = !showReading; renderCards(); };
+$('start').onclick = () => {
+  if (cardMode !== 'all' || !cards?.queue[cards.index]) {
+    cardMode = 'all';
+    newCards();
+  }
+  navigate('cards');
+  $('heading').focus({preventScroll:true});
+};
+$('card-direction').onclick = () => {
+  cardReverse = !cardReverse;
+  cards.revealed = false;
+  stopAudio();
+  persistCards();
+  renderCards();
+};
+$('toggle-reading').onclick = () => {
+  showReading = !showReading;
+  persistCards();
+  renderCards();
+};
 $('shuffle').onclick = () => changeCardMode(cardMode);
 for (const button of $('card-modes').querySelectorAll('button')) button.onclick = () => changeCardMode(button.dataset.mode);
-$('flash').onclick = () => { cards.revealed = !cards.revealed; renderCards(); };
+$('flash').onclick = () => {
+  cards.revealed = !cards.revealed;
+  persistCards();
+  renderCards();
+};
 $('card-audio').onclick = () => speak(cards.queue[cards.index].spoken);
 $('other-audio').onclick = () => speak('공');
 $('previous-card').onclick = () => moveCard(-1);
@@ -491,7 +639,7 @@ for (const button of $('practice-directions').querySelectorAll('button')) {
     restartPractice();
   };
 }
-for (const id of ['practice-mode', 'practice-limit', 'number-kind']) $(id).onchange = restartPractice;
+for (const id of practiceControls) $(id).onchange = restartPractice;
 $('answer-form').onsubmit = event => {
   event.preventDefault();
   checkAnswer();
@@ -510,6 +658,7 @@ $('answer').addEventListener('keydown', event => {
 $('answer').addEventListener('input', () => {
   if (composing || practice.completed) return;
   practice.result = '';
+  persistPractice();
   renderPractice();
 });
 $('listen-question').onclick = () => speak(currentTask().audio);
@@ -525,6 +674,7 @@ $('next-question').onclick = () => {
   practice.result = '';
   practice.hadMistake = practice.completed = false;
   $('answer').value = '';
+  persistPractice();
   renderPractice();
   (currentTask() ? $('answer') : $('restart-practice')).focus();
 };
@@ -563,12 +713,16 @@ $('clear-syllable').onclick = () => {
 };
 for (const button of document.querySelectorAll('[data-read]')) button.onclick = () => speak(button.dataset.read);
 localize();
+restoreCards();
+restorePractice();
 function routeFromHash() {
   const destination = location.hash.slice(1);
   navigate(['units','cards','practice','dictionary'].includes(destination) ? destination : 'units', false, false);
+  $('heading').focus({preventScroll:true});
 }
 window.addEventListener('hashchange', routeFromHash);
 const initialView = ['units','cards','practice','dictionary'].includes(location.hash.slice(1)) ? location.hash.slice(1) : 'units';
 if (!location.hash) history.replaceState(null, '', `#${initialView}`);
 navigate(initialView, false, false);
 if (!standalone && 'serviceWorker' in navigator) navigator.serviceWorker.register('../sw.js').catch(() => {});
+if (!standalone) HanyuCourse.initOfflineAudio($('offline-audio'),Object.values(KO_AUDIO),new URL('../',location.href));

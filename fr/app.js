@@ -39,22 +39,20 @@ const MODES = {
   dictation:['Диктант','Diktant']
 };
 const PREFIX = typeof COURSE_STORAGE_PREFIX === 'string' ? COURSE_STORAGE_PREFIX : 'hanyuwed:fr:';
-const languageKey = PREFIX === 'hanyuwed:fr:' ? 'hanyu-language-v1' : PREFIX + 'language';
+const languageKey = PREFIX === 'hanyuwed:fr:' ? HanyuCourse.languageKey : PREFIX + 'language';
 const storage = {
   available:true,
   read(key, fallback) {
-    try {
-      const value = localStorage.getItem(key);
-      return value === null ? fallback : JSON.parse(value);
-    } catch { return fallback; }
+    return HanyuCourse.readStored(key,fallback);
   },
   write(key,value) {
-    try { localStorage.setItem(key,JSON.stringify(value)); return true; }
-    catch { this.available = false; return false; }
+    const saved = HanyuCourse.writeStored(key,value);
+    if (!saved) this.available = false;
+    return saved;
   }
 };
 function readLanguage() {
-  try { return localStorage.getItem(languageKey) === 'uz' ? 'uz' : 'ru'; } catch { return 'ru'; }
+  return HanyuCourse.readLanguage(languageKey);
 }
 let lang = readLanguage();
 const t = (ru, uz) => lang === 'uz' ? uz : ru;
@@ -79,9 +77,13 @@ let mode = 'writing';
 let practice = null;
 let wordQuery = '';
 let dictFilter = 'all';
-let settings = {direction:'to-fr', amount:'10', verb:'all', person:'all', form:'verb', pastAux:'all', pastForm:'full'};
+const defaultSettings = {direction:'to-fr', amount:'10', verb:'all', person:'all', form:'verb', pastAux:'all', pastForm:'full'};
+const cardsKey = PREFIX + 'cards:v1';
+const practiceKey = forMode => PREFIX + 'practice:v1:' + forMode;
+let settings = {...defaultSettings};
 let voices = [];
 let spoken = null;
+let recordedAudio = null;
 let soundStatus = '';
 let topicFocus = null;
 
@@ -154,6 +156,10 @@ const ORIGINAL_EXAMPLES = [
 ];
 
 function stopSpeech() {
+  if (recordedAudio) {
+    recordedAudio.pause();
+    recordedAudio = null;
+  }
   if (spoken && 'speechSynthesis' in window) window.speechSynthesis.cancel();
   spoken = null;
 }
@@ -164,34 +170,66 @@ function updateVoices() {
 }
 if ('speechSynthesis' in window) {
   updateVoices();
-  window.speechSynthesis.addEventListener('voiceschanged',updateVoices);
+  window.speechSynthesis.addEventListener('voiceschanged',() => {
+    const hadVoice = voices.length > 0;
+    updateVoices();
+    if (hadVoice !== (voices.length>0) && view==='practice' && mode==='dictation' && !practice) render();
+  });
 }
+const speechText = text => variants(text)[0].replaceAll('…','').trim();
+const recordingFor = text => typeof FR_AUDIO === 'object' ? FR_AUDIO[speechText(text)] : undefined;
+const hasFrenchVoice = () => voices.length && 'SpeechSynthesisUtterance' in window;
+
 function say(text, target = $('sound-status')) {
   updateVoices();
+  stopSpeech();
   const setStatus = message => {
     soundStatus = message;
     if (target?.isConnected) target.textContent = message;
   };
-  const voice = voices.find(voice => voice.lang === 'fr-FR') || voices[0];
-  if (!voice || !('SpeechSynthesisUtterance' in window)) {
-    setStatus(t('Французский голос недоступен на этом устройстве.', 'Bu qurilmada fransuzcha ovoz mavjud emas.'));
-    return;
-  }
-  stopSpeech();
-  const utterance = new SpeechSynthesisUtterance(variants(text)[0].replace(/…/g,''));
-  utterance.lang = voice.lang;
-  utterance.voice = voice;
-  utterance.rate = .89;
-  utterance.onend = () => { if (spoken === utterance) { spoken = null; setStatus(''); } };
-  utterance.onerror = () => {
-    if (spoken === utterance) {
+  const source = recordingFor(text);
+  const speakWithBrowser = () => {
+    if (!hasFrenchVoice()) {
+      setStatus(source ? t('Запись не загрузилась. Проверь подключение.', 'Audio yuklanmadi. Internet aloqasini tekshir.') :
+        t('Для этого текста нет записи или доступного голоса.', 'Bu matn uchun audio yoki ovoz mavjud emas.'));
+      return;
+    }
+    const voice = voices.find(voice => voice.lang === 'fr-FR') || voices[0];
+    const utterance = new SpeechSynthesisUtterance(speechText(text));
+    utterance.lang = voice.lang;
+    utterance.voice = voice;
+    utterance.rate = .89;
+    utterance.onend = () => { if (spoken === utterance) { spoken = null; setStatus(''); } };
+    utterance.onerror = () => {
+      if (spoken !== utterance) return;
       spoken = null;
       setStatus(t('Не удалось воспроизвести звук.', 'Ovozni ijro etib bo‘lmadi.'));
-    }
+    };
+    spoken = utterance;
+    setStatus(t('Воспроизведение…','Ijro etilmoqda…'));
+    window.speechSynthesis.speak(utterance);
   };
-  spoken = utterance;
-  setStatus(t('Воспроизведение…','Ijro etilmoqda…'));
-  window.speechSynthesis.speak(utterance);
+  if (!source) {
+    speakWithBrowser();
+    return;
+  }
+  const audio = new Audio(source);
+  recordedAudio = audio;
+  audio.onended = () => {
+    if (recordedAudio !== audio) return;
+    recordedAudio = null;
+    setStatus('');
+  };
+  const failed = () => {
+    if (recordedAudio !== audio) return;
+    recordedAudio = null;
+    speakWithBrowser();
+  };
+  audio.onerror = failed;
+  setStatus(t('Загружается запись…','Audio yuklanmoqda…'));
+  audio.play().then(() => {
+    if (recordedAudio === audio) setStatus(t('Воспроизведение…','Ijro etilmoqda…'));
+  }).catch(failed);
 }
 
 function anchor(view, name, selection) {
@@ -214,10 +252,16 @@ function selectionSummary() {
   return t('Выбрано · ' + set.length, 'Tanlangan · ' + set.length);
 }
 
+const selectionId = () => [...selected].sort().join(',');
+
 function updateSelection() {
   storage.write(PREFIX + 'topics:v1', [...selected]);
   cardState = null;
-  if (practice && (mode === 'writing' || mode === 'dictation')) practice = null;
+  storage.write(cardsKey,null);
+  if (mode === 'writing') {
+    practice = null;
+    savePractice();
+  }
 }
 
 function topicsPage() {
@@ -266,6 +310,23 @@ function hardEntries() {
 function cardsStart() {
   const queue = hardOnly ? hardEntries() : selectedEntries();
   cardState = {queue:shuffle(queue), index:0, back:false};
+  saveCards();
+}
+
+function saveCards() {
+  if (!cardState) return;
+  const {queue,index,back} = cardState;
+  storage.write(cardsKey,{selection:selectionId(),ids:queue.map(entry => entry.id),index,back,cardDirection,hardOnly});
+}
+
+function restoreCards() {
+  const saved = storage.read(cardsKey,null);
+  if (!saved || saved.selection!==selectionId() || !Array.isArray(saved.ids)) return;
+  const queue = itemsFromIds(selectedEntries(),saved.ids,item => item.id);
+  if (!queue || !Number.isInteger(saved.index) || saved.index<0 || saved.index>queue.length) return;
+  cardState = {queue,index:saved.index,back:saved.back===true};
+  cardDirection = saved.cardDirection==='to-fr' ? 'to-fr' : 'from-fr';
+  hardOnly = saved.hardOnly===true;
 }
 
 function cardsPage() {
@@ -315,7 +376,7 @@ const FORMS = {
   mixed:['Разные формы','Aralash shakllar']
 };
 const PAST_FORMS = {
-  full:['Вся форма','To‘liq shakl'], participle:['Базовое причастие','Asosiy participe passé'],
+  full:['Вся форма','To‘liq shakl'], participle:['Базовая форма причастия','Sifatdoshning asosiy shakli'],
   aux:['Вспомогательный глагол','Yordamchi fe’l'], agreement:['Согласование с être','Être bilan moslashuv'],
   negative:['Отрицание','Inkor'], mixed:['Разные формы','Aralash shakllar']
 };
@@ -424,29 +485,14 @@ function exercisePool() {
   if (mode==='past') {
     const list = COURSE.past.filter(e => (settings.verb==='all'||e.verb===settings.verb) && (settings.pastAux==='all'||e.aux===settings.pastAux));
     const form = settings.pastForm;
-    const result = [];
-    for (const entry of list) {
-      if (form==='participle') {
-        result.push(pastExercise(entry,'Il','il','m',false,form));
-        continue;
-      }
-      if (form==='agreement' && entry.aux!=='être') continue;
-      const people = [['Paul','il','m',false],['Léa','elle','f',false],['Paul et Marc','ils','m',true],['Léa et Inès','elles','f',true]];
-      for (const person of people) {
-        if (form==='negative' || form==='mixed') {
-          const item = pastExercise(entry,...person,'full');
-          const aux = AUXILIARIES[entry.aux][PERSON_INDEX[person[1]]];
-          const phrase = negation(person[0],aux);
-          const participle = item.accepted[0].slice(aux.length+1);
-          const expected = phrase.slice(person[0].length+1) + ' ' + participle;
-          result.push({...item,id:item.id+'-negative',accepted:[expected], title:person[0]+' ___ '+PAST_CONTEXT[entry.verb]+'.',
-            negative:true,elision:true,solution:person[0]+' '+expected+' '+PAST_CONTEXT[entry.verb]+'.',
-            label:['Впиши отрицательную глагольную форму с ne/n’ и pas.','Ne/n’ va pas bilan inkor fe’l shaklini yozing.']});
-        }
-        if (form!=='negative') result.push(pastExercise(entry,...person,form==='mixed'?'full':form));
-      }
-    }
-    return result;
+    const subjects = PAST_SUBJECTS.filter(subject => settings.person==='all' || subject.person===settings.person);
+    const forms = form==='mixed' ? ['full','negative'] : [form];
+    const questions = list.flatMap(entry => {
+      if (form==='participle') return [pastExercise(entry,PAST_SUBJECTS[0],form)];
+      if (form==='agreement' && entry.aux!=='être') return [];
+      return subjects.flatMap(subject => forms.map(type => pastExercise(entry,subject,type)));
+    });
+    return [...new Map(questions.map(question => [question.id,question])).values()];
   }
   if (mode==='dictation') return DICTATION.map(([id,fr,ru,uz]) => ({
     id:'dictation-'+id,fr:true, clip:fr, title:'', note:'', accepted:[fr],
@@ -455,16 +501,80 @@ function exercisePool() {
   return CONTEXT_EXERCISES.filter(item=>item.group===mode);
 }
 
+function itemsFromIds(pool, ids, idFor) {
+  if (!Array.isArray(ids) || ids.length>pool.length || new Set(ids).size!==ids.length) return null;
+  const index = new Map(pool.map(item => [idFor(item),item]));
+  const items = ids.map(id => index.get(id));
+  return items.every(Boolean) ? items : null;
+}
+
+const questionId = item => item.entry?.id || item.id;
+
+function savePractice() {
+  let run = null;
+  if (practice) {
+    const position = {index:practice.index,replies:practice.replies};
+    run = {ids:practice.queue.map(questionId),position};
+    if (mode==='writing') {
+      practice.languageSessions.set(lang,position);
+      run.languageSessions = Object.fromEntries(practice.languageSessions);
+    }
+  }
+  storage.write(practiceKey(mode),{settings,run,selection:mode==='writing' ? selectionId() : null});
+}
+
+function restorePosition(saved, length, fallbackIndex = 0) {
+  const index = Number.isInteger(saved?.index) && saved.index>=0 && saved.index<=length ? saved.index : fallbackIndex;
+  const replies = Array.isArray(saved?.replies) ? saved.replies.slice(0,length).map(reply => {
+    if (!reply || typeof reply!=='object') return null;
+    return {
+      draft:typeof reply.draft==='string' ? reply.draft : '',
+      feedback:Object.hasOwn(MESSAGES,reply.feedback) ? reply.feedback : null,
+      attempts:Number.isSafeInteger(reply.attempts) && reply.attempts>0 ? reply.attempts : 0,
+      firstCorrect:reply.firstCorrect===true,correct:reply.correct===true,shown:reply.shown===true
+    };
+  }) : [];
+  return {index,replies};
+}
+
+function restorePractice() {
+  const saved = storage.read(practiceKey(mode),null);
+  const options = {
+    direction:['to-fr','from-fr'], amount:['10','20','all'],
+    verb:['all',...(mode==='past'?COURSE.past:COURSE.present).map(entry => entry.verb)],
+    person:['all',...PERSONS], form:Object.keys(FORMS), pastAux:['all','être','avoir'], pastForm:Object.keys(PAST_FORMS)
+  };
+  settings = {...defaultSettings};
+  for (const [key,values] of Object.entries(options)) {
+    if (values.includes(saved?.settings?.[key])) settings[key] = saved.settings[key];
+  }
+  practice = null;
+  const run = saved?.run;
+  if (!Array.isArray(run?.ids) || !run.ids.length || (mode==='writing' && saved.selection!==selectionId())) return;
+  const queue = itemsFromIds(exercisePool(),run.ids,questionId);
+  if (!queue) return;
+  const position = restorePosition(run.position,queue.length);
+  const languageSessions = new Map();
+  if (mode==='writing') {
+    for (const language of ['ru','uz']) {
+      if (run.languageSessions?.[language]) languageSessions.set(language,restorePosition(run.languageSessions[language],queue.length));
+    }
+  }
+  const current = mode==='writing' ? languageSessions.get(lang) || {index:Math.min(position.index,queue.length-1),replies:[]} : position;
+  practice = {queue,...current,languageSessions};
+}
+
 function practiceStart(items) {
   updateVoices();
-  if (mode==='dictation' && !voices.length) {
-    soundStatus = t('Диктант появится при наличии французского голоса.','Fransuzcha ovoz mavjud bo‘lsa, diktant ishlaydi.');
+  let queue = items || shuffle(exercisePool());
+  if (mode==='dictation' && !hasFrenchVoice()) queue = queue.filter(item => recordingFor(item.clip));
+  if (!items && settings.amount!=='all') queue = queue.slice(0,Number(settings.amount));
+  if (!queue.length) {
+    if (mode==='dictation') soundStatus = t('Записи для диктанта недоступны. Попробуй письменное упражнение.','Diktant audiolari mavjud emas. Yozma mashqni sinab ko‘r.');
     return false;
   }
-  const pool = items || shuffle(exercisePool());
-  const queue = items || (settings.amount==='all' ? pool : pool.slice(0,Number(settings.amount)));
-  if (!queue.length) return false;
   practice = {queue,index:0,replies:[],languageSessions:new Map()};
+  savePractice();
   return true;
 }
 
@@ -515,28 +625,33 @@ function practiceOptions() {
     const list = mode==='present'?COURSE.present:COURSE.past.filter(e=>settings.pastAux==='all'||e.aux===settings.pastAux);
     if (mode==='past') fields.push(selectField('pastAux',t('Вспомогательный','Yordamchi fe’l'),[['all',all],['être','être'],['avoir','avoir']]));
     fields.push(selectField('verb',t('Глагол','Fe’l'),[['all',all],...list.map(e=>[e.verb,e.verb])]));
-    if (mode==='present') fields.push(selectField('person',t('Лицо','Shaxs'),[['all',all],...PERSONS.map(p=>[p,p])]));
     const options = mode==='present' ? FORMS : PAST_FORMS;
     fields.push(selectField(mode==='present'?'form':'pastForm',t('Что написать','Nimani yozish'),Object.entries(options).map(([k,v])=>[k,tr(v)])));
+    if (mode==='present'||settings.pastForm!=='participle') {
+      fields.push(selectField('person',t('Лицо','Shaxs'),[['all',all],...PERSONS.map(p=>[p,p])]));
+    }
   }
   fields.push(selectField('amount',t('Заданий','Mashqlar soni'),[['10','10'],['20','20'],['all',t('Весь урок','Butun dars')]]));
   const empty = mode==='writing' && !selected.size;
   const inversionJe = mode==='present' && settings.form==='inversion' && settings.person==='je';
   const agreementAvoir = mode==='past' && settings.pastForm==='agreement' && (
     settings.pastAux==='avoir' || COURSE.past.some(e=>e.verb===settings.verb&&e.aux==='avoir'));
+  const missingDictation = mode==='dictation' && !hasFrenchVoice() && !DICTATION.some(([,text]) => recordingFor(text));
   const notice = empty ? t('Сначала выбери темы.','Avval mavzularni tanlang.') : inversionJe ?
     t('Для je выбери вопрос с est-ce que.','Je bilan est-ce que shaklini tanlang.') : agreementAvoir ?
-    t('Для этого упражнения выбери être.','Bu mashqda être ni tanlang.') : '';
+    t('Для этого упражнения выбери être.','Bu mashqda être ni tanlang.') : missingDictation ?
+    t('Записи для диктанта недоступны.','Diktant audiolari mavjud emas.') : '';
   const reference = mode==='present' ? presentReference() : mode==='past' ? pastReference() : '';
   return '<section class="box stack">' + (mode==='writing'?'<p class="detail">'+esc(selectionSummary())+' · <a href="#topics">'+
     t('Изменить темы','Mavzularni o‘zgartirish')+'</a></p>':'') + '<div class="form-grid">'+fields.join('')+'</div>'+
-    (notice?'<p class="detail">'+esc(notice)+'</p>':'')+'<div>'+
+    (notice?'<p class="detail">'+esc(notice)+'</p>':'')+
+    (missingDictation?'<a href="#practice">'+t('Открыть письменное упражнение','Yozma mashqni ochish')+'</a>':'')+'<div>'+
     actionButton(t('Начать','Boshlash'),'start-practice','primary',notice?'disabled':'')+'</div>'+soundRegion()+'</section>'+reference;
 }
 
 function resultPage() {
   const wrong = practice.queue.filter((_,index)=>!practice.replies[index]?.firstCorrect);
-  const corrected = practice.replies.filter(reply=>!reply.firstCorrect&&reply.correct).length;
+  const corrected = practice.replies.filter(reply=>reply?.correct&&!reply.firstCorrect).length;
   const skipped = practice.queue.filter((_,index)=>!practice.replies[index]?.attempts && !practice.replies[index]?.shown).length;
   return '<section class="box stack"><h2>'+t('Результат','Natija')+'</h2><p>'+
     t('Верно с первой попытки: ','Birinchi urinishda to‘g‘ri: ')+(practice.queue.length-wrong.length)+' / '+practice.queue.length+
@@ -559,10 +674,11 @@ function questionPage() {
     '<progress class="progress" max="'+practice.queue.length+'" value="'+practice.index+'" aria-label="'+t('Ход практики','Mashq jarayoni')+'"></progress>'+
     '<p id="instruction">'+esc(tr(item.label))+'</p>'+(item.title?'<p class="prompt"'+(item.promptFr||!item.entry?' lang="fr"':'')+'>'+
       esc(item.title)+'</p>':'')+
+    (item.hint?'<p class="detail" id="question-context">'+esc(tr(item.hint))+'</p>':'')+
     (item.clip?'<div>'+sound(item.clip)+'</div>'+detail:'')+
     '<form id="answer-form" class="answer-form" novalidate><label class="field"><span>'+t('Твой ответ','Javobingiz')+
     '</span><input id="answer" type="text" lang="'+(item.fr?'fr':lang)+'" value="'+esc(reply?.draft || '')+
-    '" aria-describedby="instruction feedback" autocapitalize="off" autocorrect="off" spellcheck="false" autocomplete="off"></label>'+accents+
+    '" aria-describedby="instruction '+(item.hint?'question-context ':'')+'feedback" autocapitalize="off" autocorrect="off" spellcheck="false" autocomplete="off"></label>'+accents+
     '<div id="feedback" class="feedback" role="status" aria-live="polite"></div><div class="row answer-actions"><button class="primary" id="check" type="submit">'+
     t('Проверить','Tekshirish')+'</button>'+actionButton(t('Показать ответ','Javobni ko‘rish'),'reveal','text-button','id="reveal"')+
     '</div></form><div class="row">'+
@@ -580,8 +696,8 @@ function practicePage() {
 
 function dictionaryResults() {
   const scope = dictFilter==='selected' ? selectedEntries() : dictFilter==='all' ? entries : topicEntries(dictFilter);
-  const query = searchSpelling(wordQuery);
-  const words = scope.filter(entry=>[entry.fr,...entry.meanings.flatMap(row=>[row.ru,row.uz])].some(value=>searchSpelling(value).includes(query)));
+  const words = HanyuCourse.rankedDictionary(scope, wordQuery,
+    entry => [entry.fr,...entry.meanings.flatMap(row=>[row.ru,row.uz])], searchSpelling);
   const count = $('word-results');
   if (count) count.textContent = t('Найдено: ','Topildi: ') + words.length;
   const empty = '<li class="box">'+t('Слова не найдены. Измени запрос или фильтр.','So‘zlar topilmadi. So‘rov yoki filtrni o‘zgartiring.')+'</li>';
@@ -643,7 +759,8 @@ function render() {
   $('brand-course').textContent = t('Французский по карточкам', 'Fransuz tili kartochkalarda');
   $('language-switch').setAttribute('aria-label',t('Язык обучения','O‘rganish tili'));
   $('help').setAttribute('aria-label',t('Как пользоваться','Qanday foydalaniladi?'));
-  $('nav').innerHTML = Object.entries(VIEWS).map(([id,label])=>anchor(id,tr(label),view===id)).join('');
+  $('nav').innerHTML = Object.entries(VIEWS).map(([id,label]) =>
+    anchor(id,tr(HanyuCourse.labels[id === 'topics' ? 'units' : id] || label),view===id)).join('');
   $('nav').ariaLabel = t('Разделы','Bo‘limlar');
   $('footer-detail').textContent = storage.available ?
     t('Прогресс хранится в этом браузере','Natijalar shu brauzerda saqlanadi') :
@@ -732,6 +849,7 @@ function check() {
     }
   }
   updateFeedback();
+  savePractice();
   if (result==='correct') $('next').focus();
 }
 
@@ -743,6 +861,7 @@ function displayAnswer() {
   reply.feedback = 'shown';
   saveReply(item,reply);
   updateFeedback();
+  savePractice();
   $('next').focus();
 }
 
@@ -751,6 +870,7 @@ function moveQuestion(offset) {
   if (index < 0 || index > practice.queue.length) return;
   clearSound();
   practice.index = index;
+  savePractice();
   render();
   $('answer')?.focus();
   if (!$('answer')) main.querySelector('[data-action="previous-question"]')?.focus();
@@ -767,8 +887,7 @@ function updateRoute() {
   const requestedMode = Object.hasOwn(MODES,targetMode) ? targetMode : 'writing';
   if (requested==='practice' && requestedMode!==mode) {
     mode = requestedMode;
-    practice = null;
-    settings.verb = 'all';
+    restorePractice();
   }
   if (requested==='practice' && rawVerb) {
     try {
@@ -778,6 +897,7 @@ function updateRoute() {
         settings.verb = verb;
         settings.pastAux = 'all';
         practice = null;
+        savePractice();
       }
     } catch { /* Malformed hash: keep the current selection. */ }
   }
@@ -807,13 +927,13 @@ function setLanguage(language) {
   lang = language;
   try { localStorage.setItem(languageKey,lang); } catch { storage.available = false; }
   if (practice && mode==='writing') {
+    const previousIndex = practice.index;
+    practice.languageSessions.set(previous,{index:previousIndex,replies:practice.replies});
     practice.queue = practice.queue.map(item=>lexExercise(item.entry,settings.direction==='to-fr'));
-    if (settings.direction==='from-fr') {
-      practice.languageSessions.set(previous,{index:practice.index,replies:practice.replies});
-      const session = practice.languageSessions.get(lang);
-      practice.index = session?.index ?? 0;
-      practice.replies = session?.replies ?? [];
-    }
+    const session = practice.languageSessions.get(lang);
+    practice.index = session?.index ?? Math.min(previousIndex,practice.queue.length-1);
+    practice.replies = session?.replies ?? [];
+    savePractice();
   }
   clearSound();
   render();
@@ -854,7 +974,7 @@ document.addEventListener('click',event=>{
     updateSelection();
   }
   if (action==='begin-cards') { hardOnly=false; cardsStart(); go('cards'); return; }
-  if (action==='begin-writing') { mode='writing'; practice=null; go('practice'); return; }
+  if (action==='begin-writing') { go('practice'); return; }
   if (action==='flip') { cardState.back = !cardState.back; }
   if (action==='shuffle') cardsStart();
   if (action==='card-direction') { cardDirection = cardDirection==='to-fr'?'from-fr':'to-fr'; if (cardState) cardState.back=false; }
@@ -879,7 +999,10 @@ document.addEventListener('click',event=>{
     cardState.index++;
     cardState.back = false;
   }
-  if (action==='practice-settings') practice=null;
+  if (action==='practice-settings') {
+    practice = null;
+    savePractice();
+  }
   if (action==='start-practice') {
     if (!practiceStart()) {
       const status = $('sound-status');
@@ -903,6 +1026,7 @@ document.addEventListener('click',event=>{
     input.focus();
     return;
   }
+  if (action==='flip'||action==='card-direction'||action.endsWith('-card')||action.startsWith('grade-')) saveCards();
   clearSound();
   render();
   if (action==='flip'||action.startsWith('grade-')||action.endsWith('-card')) {
@@ -922,6 +1046,7 @@ main.addEventListener('input',event=>{
     reply.draft = event.target.value;
     reply.feedback = null;
     updateFeedback();
+    savePractice();
   }
   if (event.target.id==='word-query') {
     wordQuery = event.target.value;
@@ -946,10 +1071,18 @@ main.addEventListener('change',event=>{
     const key = target.dataset.setting;
     settings[key] = target.value;
     if (key==='pastAux') settings.verb='all';
+    if (['verb','pastAux'].includes(key) && location.hash.split('/').length>2) {
+      const suffix = settings.verb==='all' ? '' : '/' + encodeURIComponent(settings.verb);
+      history.replaceState(null,'','#practice/' + mode + suffix);
+    }
+    savePractice();
     render();
     main.querySelector('[data-setting="'+key+'"]')?.focus();
   }
 });
+restoreCards();
+restorePractice();
 updateRoute();
 
 if ('serviceWorker' in navigator) navigator.serviceWorker.register('../sw.js').catch(() => {});
+if (typeof FR_AUDIO === 'object') HanyuCourse.initOfflineAudio($('offline-audio'),Object.values(FR_AUDIO),new URL('../',location.href));

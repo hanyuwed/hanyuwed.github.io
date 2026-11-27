@@ -1,4 +1,4 @@
-const languageKey = 'hanyu-language-v1';
+const {languageKey, readLanguage: savedLanguage} = HanyuCourse;
 const buttons = Array.from(document.querySelectorAll('[data-language]'));
 const translations = Array.from(document.querySelectorAll('[data-uz]'), node => ({
   node,
@@ -14,11 +14,6 @@ function renderLanguage(language) {
   );
   for (const button of buttons) button.setAttribute('aria-pressed', String(button.dataset.language === language));
   for (const {node, ru, uz} of translations) node.textContent = language === 'uz' ? uz : ru;
-}
-
-function savedLanguage() {
-  try { return localStorage.getItem(languageKey) === 'uz' ? 'uz' : 'ru'; }
-  catch { return 'ru'; }
 }
 
 for (const button of buttons) {

@@ -35,6 +35,8 @@ function translationOptions(word, lang) {
   const full = word[lang];
   const bare = bareMeaning(full);
   const options = [full, bare, ...bare.split(/[,;/]+/u)];
+  if (lang === 'uz' && word.hangul.startsWith('날씨가 ')) options.push(full + ' bo‘lmoq');
+  if (lang === 'uz' && word.hangul === '시원하다') options.push('salqin');
   const system = numberSystem(word);
   if (system) {
     const digits = digitWords[lang];
@@ -115,18 +117,41 @@ export function numberTasks(words, lang, choice, corpus = words) {
 }
 
 const contexts = [
-  [3, 'particle', '책□ 읽다', '을', '를', '책 оканчивается на согласную.', '책 undosh bilan tugaydi.'],
-  [3, 'particle', '커피□ 마시다', '를', '을', '커피 оканчивается на гласную.', '커피 unli bilan tugaydi.'],
-  [3, 'particle', '학교□ 가요', '에', '에서', 'Здесь школа — пункт назначения.', 'Bu gapda 학교 boradigan joy.'],
-  [3, 'particle', '학교□ 공부해요', '에서', '에', 'Здесь действие происходит в школе.', 'Bu gapda ish-harakat maktabda sodir bo‘ladi.'],
-  [4, 'particle', '책이 책상 위□ 있어요', '에', '에서', 'Здесь речь о положении предмета.', 'Bu gap narsa qayerdaligini bildiradi.'],
-  [8, 'verb', '피아노를 □', '치다', '하다', 'Для игры на пианино здесь подходит 치다.', 'Pianino chalish uchun 치다 ishlatiladi.'],
-  [8, 'verb', '스키를 □', '타다', '하다', 'Кататься на лыжах — 스키를 타다.', 'Chang‘i uchish — 스키를 타다.'],
-  [8, 'verb', '축구를 □', '하다', '치다', 'Играть в футбол — 축구를 하다.', 'Futbol o‘ynash — 축구를 하다.']
+  [1, 'form', '저는 학생□.', '이에요', '예요', 'После согласной в конце 학생 нужна форма 이에요.', '학생 undosh bilan tugaydi, shuning uchun 이에요 yoziladi.', 'Допиши вежливую форму «быть». Я студент.', '«Bo‘lmoq» fe’lining xushmuomala shaklini yoz. Men talabaman.'],
+  [1, 'form', '저는 의사□.', '예요', '이에요', 'После гласной в конце 의사 нужна форма 예요.', '의사 unli bilan tugaydi, shuning uchun 예요 yoziladi.', 'Допиши вежливую форму «быть». Я врач.', '«Bo‘lmoq» fe’lining xushmuomala shaklini yoz. Men shifokorman.'],
+  [1, 'particle', '저□ 한국 사람이에요.', '는', '은', 'Тематическая частица после гласной 저 — 는.', '저 unli bilan tugaydi, mavzu yuklamasi 는 bo‘ladi.', 'Обозначь тему высказывания. Я кореец или кореянка.', 'Gapning mavzusini bildiruvchi yuklamani yoz. Men koreysman.'],
+  [2, 'particle', '책□ 있어요.', '이', '가', 'У 책 есть конечная согласная, поэтому частица подлежащего — 이.', '책 undosh bilan tugaydi, shuning uchun ega yuklamasi 이 bo‘ladi.', 'Впиши частицу подлежащего. Есть книга.', 'Ega yuklamasini yoz. Kitob bor.'],
+  [2, 'particle', '의자□ 없어요.', '가', '이', 'После гласной в конце 의자 частица подлежащего — 가.', '의자 unli bilan tugaydi, shuning uchun ega yuklamasi 가 bo‘ladi.', 'Впиши частицу подлежащего. Стула нет.', 'Ega yuklamasini yoz. Stul yo‘q.'],
+  [2, 'form', '이건 지우개□.', '예요', '이에요', 'В конце 지우개 стоит гласная, поэтому нужна форма 예요.', '지우개 unli bilan tugaydi, shuning uchun 예요 yoziladi.', 'Допиши вежливую форму «быть». Это ластик.', '«Bo‘lmoq» fe’lining xushmuomala shaklini yoz. Bu o‘chirg‘ich.'],
+  [3, 'particle', '책□ 읽다', '을', '를', '책 оканчивается на согласную, поэтому нужна форма 을.', '책 undosh bilan tugaydi, shuning uchun 을 yoziladi.', 'Впиши частицу дополнения. Читать книгу.', 'To‘ldiruvchi yuklamasini yoz. Kitob o‘qimoq.'],
+  [3, 'particle', '커피□ 마시다', '를', '을', '커피 оканчивается на гласную, поэтому нужна форма 를.', '커피 unli bilan tugaydi, shuning uchun 를 yoziladi.', 'Впиши частицу дополнения. Пить кофе.', 'To‘ldiruvchi yuklamasini yoz. Qahva ichmoq.'],
+  [3, 'particle', '학교□ 가요', '에', '에서', 'Здесь школа — пункт назначения, который обозначает 에.', 'Bu gapda 학교 boradigan joy, uni 에 yuklamasi bildiradi.', 'Иду в школу. Впиши частицу места назначения.', 'Maktabga ketyapman. Boradigan joyni bildiruvchi yuklamani yoz.'],
+  [3, 'particle', '학교□ 공부해요', '에서', '에', 'Действие происходит в школе, поэтому нужна частица 에서.', 'Ish-harakat maktabda sodir bo‘lyapti, shuning uchun 에서 yoziladi.', 'Учусь в школе. Впиши частицу места действия.', 'Maktabda o‘qiyman. Ish-harakat joyini bildiruvchi yuklamani yoz.'],
+  [4, 'particle', '책이 책상 위□ 있어요', '에', '에서', 'Положение предмета обозначает 에.', 'Narsaning turgan joyini 에 yuklamasi bildiradi.', 'Книга лежит на столе. Впиши частицу места.', 'Kitob yozuv stoli ustida. Joy yuklamasini yoz.'],
+  [4, 'particle', '약국이 병원 옆□ 있어요.', '에', '에서', 'Место, где находится аптека, обозначаем частицей 에.', 'Dorixona joylashgan o‘rinni 에 yuklamasi bildiradi.', 'Аптека рядом с больницей.', 'Dorixona shifoxonaning yonida.'],
+  [5, 'particle', '월요일□ 만나요.', '에', '에서', '에 указывает, когда происходит действие.', '에 ish-harakat qachon bo‘lishini bildiradi.', 'Встретимся в понедельник.', 'Dushanba kuni uchrashamiz.'],
+  [5, 'particle', '토요일□ 일요일까지 쉬어요.', '부터', '까지', 'Начало периода обозначает 부터, конец — 까지.', 'Davrning boshlanishini 부터, oxirini 까지 bildiradi.', 'Отдыхаю с субботы до воскресенья.', 'Shanbadan yakshanbagacha dam olaman.'],
+  [5, 'particle', '월요일부터 금요일□ 일해요.', '까지', '부터', 'До пятницы — 금요일까지.', 'Jumagacha — 금요일까지.', 'Работаю с понедельника до пятницы.', 'Dushanbadan jumagacha ishlayman.'],
+  [6, 'form', '사과 □ 개 주세요.', '두', '둘', 'Перед счётным словом 개 форма 둘 меняется на 두.', '개 sanoq so‘zidan oldin 둘 shakli 두 ga o‘zgaradi.', 'Впиши числительное. Дайте два яблока, пожалуйста.', 'Sonni yoz. Iltimos, ikkita olma bering.'],
+  [6, 'form', '김밥 □ 줄 주세요.', '한', '하나', 'Перед счётным словом 줄 форма 하나 меняется на 한.', '줄 sanoq so‘zidan oldin 하나 shakli 한 ga o‘zgaradi.', 'Впиши числительное. Дайте один ролл кимпапа, пожалуйста.', 'Sonni yoz. Iltimos, bitta kimbap bering.'],
+  [6, 'particle', '비빔밥□ 주세요.', '을', '를', 'У 비빔밥 есть конечная согласная, поэтому нужна частица 을.', '비빔밥 undosh bilan tugaydi, shuning uchun 을 yoziladi.', 'Впиши частицу дополнения. Дайте пибимпап, пожалуйста.', 'To‘ldiruvchi yuklamasini yoz. Iltimos, bibimbap bering.'],
+  [7, 'form', '오늘은 □. (춥다)', '추워요', '춥어요', 'В вежливой форме 춥다 превращается в 추워요.', '춥다 fe’lining xushmuomala shakli — 추워요.', 'Впиши вежливую форму на -요. Сегодня холодно.', '-요 bilan tugaydigan xushmuomala shaklni yoz. Bugun havo sovuq.'],
+  [7, 'form', '여름에는 □. (덥다)', '더워요', '덥어요', 'В вежливой форме 덥다 превращается в 더워요.', '덥다 fe’lining xushmuomala shakli — 더워요.', 'Впиши вежливую форму на -요. Летом жарко.', '-요 bilan tugaydigan xushmuomala shaklni yoz. Yozda havo issiq.'],
+  [7, 'particle', '비□ 와요.', '가', '이', 'После гласной в конце 비 нужна частица подлежащего 가.', '비 unli bilan tugaydi, shuning uchun ega yuklamasi 가 bo‘ladi.', 'Впиши частицу подлежащего. Идёт дождь.', 'Ega yuklamasini yoz. Yomg‘ir yog‘yapti.'],
+  [8, 'verb', '피아노를 □', '치다', '하다', 'Для игры на пианино можно использовать 치다 или 연주하다.', 'Pianino chalish uchun 치다 yoki 연주하다 ishlatiladi.', 'Играть на пианино. Впиши глагол в словарной форме.', 'Pianino chalmoq. Fe’lni lug‘at shaklida yoz.'],
+  [8, 'verb', '스키를 □', '타다', '하다', 'Кататься на лыжах — 스키를 타다.', 'Chang‘ida uchmoq — 스키를 타다.', 'Кататься на лыжах. Впиши глагол в словарной форме.', 'Chang‘ida uchmoq. Fe’lni lug‘at shaklida yoz.'],
+  [8, 'verb', '축구를 □', '하다', '치다', 'Играть в футбол — 축구를 하다.', 'Futbol o‘ynamoq — 축구를 하다.', 'Играть в футбол. Впиши глагол в словарной форме.', 'Futbol o‘ynamoq. Fe’lni lug‘at shaklida yoz.'],
+  [9, 'form', '길이 □. (좁다)', '좁아요', '좁어요', 'У 좁다 гласная ㅗ, поэтому в вежливой форме получается 좁아요.', '좁다 negizida ㅗ bor, xushmuomala shakli 좁아요 bo‘ladi.', 'Впиши вежливую форму на -요. Дорога узкая.', '-요 bilan tugaydigan xushmuomala shaklni yoz. Yo‘l tor.'],
+  [9, 'particle', '날씨□ 좋아요.', '가', '이', 'После гласной в конце 날씨 нужна частица подлежащего 가.', '날씨 unli bilan tugaydi, shuning uchun ega yuklamasi 가 bo‘ladi.', 'Впиши частицу подлежащего. Погода хорошая.', 'Ega yuklamasini yoz. Ob-havo yaxshi.'],
+  [10, 'form', '사람이 □ 명 있어요.', '세', '셋', 'Перед счётным словом 명 форма 셋 меняется на 세.', '명 sanoq so‘zidan oldin 셋 shakli 세 ga o‘zgaradi.', 'Впиши числительное хангылем. Здесь три человека.', 'Sonni hangulda yoz. Bu yerda uch kishi bor.'],
+  [10, 'form', '책이 □ 권 있어요.', '네', '넷', 'Перед счётным словом 권 форма 넷 меняется на 네.', '권 sanoq so‘zidan oldin 넷 shakli 네 ga o‘zgaradi.', 'Впиши числительное хангылем. Здесь четыре книги.', 'Sonni hangulda yoz. Bu yerda to‘rtta kitob bor.'],
+  [11, 'form', '□월에 만나요.', '유', '육', 'В слове 유월 для июня используется 유, а не 육.', 'Iyun oyi 유월 deb yoziladi, bunda 육 emas, 유 ishlatiladi.', 'Заполни пропуск хангылем. Встретимся в июне.', 'Bo‘sh joyni hangulda to‘ldir. Iyun oyida uchrashamiz.'],
+  [11, 'form', '□월에 한국에 가요.', '시', '십', 'В слове 시월 для октября используется 시, а не 십.', 'Oktabr oyi 시월 deb yoziladi, bunda 십 emas, 시 ishlatiladi.', 'Заполни пропуск хангылем. В октябре еду в Корею.', 'Bo‘sh joyni hangulda to‘ldir. Oktabr oyida Koreyaga boraman.']
 ];
 export function contextTasks(selected) {
-  return contexts.filter(([unit]) => selected.has(unit)).map(([unit,type,prompt,form,wrong,ru,uz]) => ({
-    word:{unit}, type, prompt, accepted:[form], contextual:true, hint:{ru,uz}, wrong
+  return contexts.filter(([unit]) => selected.has(unit)).map(([unit,type,prompt,form,wrong,ru,uz,clueRu,clueUz]) => ({
+    word:{unit}, type, prompt, accepted:prompt === '피아노를 □' ? [form,'연주하다'] : [form], contextual:true,
+    hint:{ru,uz}, instruction:clueRu && {ru:clueRu,uz:clueUz}, wrong
   }));
 }
 

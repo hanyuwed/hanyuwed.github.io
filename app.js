@@ -2,11 +2,11 @@ import {words,selectWords,shuffled,restoreUnits} from './data.js';
 import {createPronunciationPlayer} from './audio-player.js';
 import {createPinyinPractice} from './pinyin-practice.js';
 const $=id=>document.getElementById(id), key='hanyu-progress-v1';
-const languageKey = 'hanyu-language-v1';
-let language = 'ru';
-try {
-  if (localStorage.getItem(languageKey) === 'uz') language = 'uz';
-} catch {}
+const {languageKey, readLanguage, readStored, writeStored, rankedDictionary, normalizeSearch} = HanyuCourse;
+const deckKey = 'hanyu-deck-v1';
+const markPrefix = 'hanyu-progress-v2:';
+const wordById = new Map(words.map(word => [word.id, word]));
+let language = readLanguage();
 
 const t = (ru, uz) => language === 'uz' ? uz : ru;
 const staticTranslations = [...document.querySelectorAll('[data-uz]')].map(node => ({
@@ -38,7 +38,16 @@ function changeLanguage(next) {
 $('languageRu').onclick = () => changeLanguage('ru');
 $('languageUz').onclick = () => changeLanguage('uz');
 
-let progress={};try{const saved=JSON.parse(localStorage.getItem(key)||'{}');if(saved&&typeof saved==='object'&&!Array.isArray(saved))progress=Object.fromEntries(Object.entries(saved).filter(([k,v])=>words.some(w=>w.id===Number(k))&&['hard','known'].includes(v)));}catch{}
+function loadProgress() {
+  const previous = readStored(key, {});
+  const marks = {};
+  for (const {id} of words) {
+    const value = readStored(markPrefix + id, previous[id]);
+    if (value === 'known' || value === 'hard') marks[id] = value;
+  }
+  return marks;
+}
+let progress = loadProgress();
 const unitInfo = [
   {id: 1, title: 'Знакомство', uz: 'Tanishuv', symbol: '你'},
   {id: 2, title: 'Вещи', uz: 'Buyumlar', symbol: '书'},
@@ -93,20 +102,35 @@ function navigate(nextView,writeHistory=true){pronunciation.stop();if(nextView==
       : t('учись в своём темпе', 'o‘zingga qulay tezlikda o‘rgan')}`;$('selectedUnit').textContent=selectionTitle();$('dictionaryUnit').textContent=selectionTitle() + t(' · Сменить', ' · O‘zgartirish');if(view==='units')renderUnits();else if(view==='dictionary')renderDict();else if(view==='pinyin')renderPinyin(selectedWords(), selectionTitle());else render();}
 
 let toastTimer;function toast(msg){$('toast').textContent=msg;$('toast').style.display='block';clearTimeout(toastTimer);toastTimer=setTimeout(()=>$('toast').style.display='none',3300);}
-function save(id, value){
-  try {
-    const saved = JSON.parse(localStorage.getItem(key) || '{}');
-    const current = saved && typeof saved === 'object' && !Array.isArray(saved) ? saved : {};
-    progress = {...current, [id]: value};
-    localStorage.setItem(key, JSON.stringify(progress));
-  } catch {
+function save(id, value) {
+  if (!writeStored(markPrefix + id, value)) {
     toast(t('Браузер не разрешает сохранить прогресс.', 'Natijalarni brauzerda saqlab bo‘lmadi.'));
   }
+}
+function saveDeck() {
+  writeStored(deckKey, {units, mode, ids:queue.map(word => word.id), index, reverse, showPy, revealed, done, graded:[...graded]});
+}
+
+function restoreDeck() {
+  const state = readStored(deckKey);
+  if (!state || !Array.isArray(state.units) || state.units.join() !== units.join() ||
+      !Array.isArray(state.ids) || !state.ids.length || !Number.isInteger(state.index) ||
+      !state.ids.every(id => wordById.has(id) && units.includes(wordById.get(id).unit))) return false;
+  queue = state.ids.map(id => wordById.get(id));
+  mode = state.mode === 'hard' ? 'hard' : 'all';
+  index = Math.max(0, Math.min(state.index, queue.length - 1));
+  reverse = state.reverse === true;
+  showPy = state.showPy === true;
+  revealed = state.revealed === true;
+  done = state.done === true;
+  graded = new Set(Array.isArray(state.graded) ? state.graded.filter(id => wordById.has(id)) : []);
+  return true;
 }
 function start(random=false){pronunciation.stop();queue=selectWords(units,mode,progress);if(random)queue=shuffled(queue);index=0;done=false;revealed=false;graded=new Set();render();}
 function counts(){const group=selectedWords(),known=group.filter(w=>progress[w.id]==='known').length,hard=group.filter(w=>progress[w.id]==='hard').length;$('hardCount').textContent=hard;$('summaryText').textContent=t(`Отмечено «Помню»: ${known} из ${group.length} · Ещё учу: ${hard}`,
     `Esimda: ${group.length} tadan ${known} ta · Hali o‘rganyapman: ${hard}`);return {known,hard};}
 function render(){
+  saveDeck();
   const target = t('РУ', 'UZ');
   $('directionLabel').textContent = reverse ? `${target} → 汉` : `汉 → ${target}`;
   const {hard}=counts();$('allMode').classList.toggle('selected',mode==='all');$('hardMode').classList.toggle('selected',mode==='hard');$('deck').hidden=done||!queue.length;$('empty').hidden=done||!!queue.length;$('complete').hidden=!done;if(done){$('completeText').textContent=t(`В этом круге оценено ${graded.size} из ${queue.length} карточек. Трудных слов в выбранных юнитах: ${hard}.`,
@@ -123,16 +147,55 @@ $('changeUnit').onclick=$('dictionaryUnit').onclick=()=>navigate('units');$('dir
 $('unitsTab').onclick=()=>navigate('units');$('studyTab').onclick=()=>navigate('study');$('dictTab').onclick=()=>navigate('dictionary');
 $('pinyinTab').onclick=()=>navigate('pinyin');
 $('pinyinUnit').onclick=()=>navigate('units');
-const normalize=s=>s.normalize('NFD').replace(/[\u0300-\u036f]/g,'').toLowerCase().replace(/[\s'‘’ʻʼ`]+/g,'');
-function renderDict(){const q=normalize($('search').value),pinyinQuery=/^[a-züv:]+[0-5](?:[a-züv:]+[0-5]?)*$/i.test(q)?q.replace(/[0-5]/g,''):q,list=selectedWords().filter(w=>[w.hanzi, w.ru, w.uz].some(value => normalize(value).includes(q)) || normalize(w.pinyin).includes(pinyinQuery));list.sort((a,b)=>Number(normalize(b.pinyin)===pinyinQuery||normalize(b.hanzi)===q)-Number(normalize(a.pinyin)===pinyinQuery||normalize(a.hanzi)===q));$('results').textContent=t(`Найдено: ${list.length}`, `Topildi: ${list.length}`);const root=$('wordList');root.replaceChildren();for(const w of list){const row=document.createElement('div');row.className='word';const h=document.createElement('div');h.className='word-hanzi';h.lang='zh-Hans';h.textContent=w.hanzi;const info=document.createElement('div');const py=document.createElement('div');py.className='word-py';py.textContent=w.pinyin;const translation=document.createElement('div');translation.className='word-ru';translation.textContent=wordTranslation(w);info.append(py,translation);if(progress[w.id]){const mark=document.createElement('div');mark.className='word-mark';mark.textContent=progress[w.id]==='hard'?t('↺ Ещё учу','↺ Hali o‘rganyapman'):t('✓ Помню','✓ Esimda');info.append(mark);}const sound=document.createElement('button');sound.textContent='♪';sound.setAttribute('aria-label',t(`Прослушать ${w.hanzi}`, `${w.hanzi} talaffuzini tinglash`));sound.onclick=()=>pronunciation.play(w);row.append(h,info,sound);root.append(row);}}
+function normalizeDictionary(value) {
+  const normalized = normalizeSearch(value);
+  if (/\p{Script=Cyrillic}/u.test(normalized)) return normalized;
+  const text = normalized.normalize('NFD').replace(/\p{M}/gu, '').replace(/\s/gu, '');
+  return /^(?:[a-z:]+[0-5])+[a-z:]*$/u.test(text) ? text.replace(/[0-5]/gu, '') : text;
+}
+
+function renderDict() {
+  const list = rankedDictionary(selectedWords(), $('search').value,
+    word => [word.hanzi, word.pinyin, word.ru, word.uz], normalizeDictionary);
+  $('results').textContent = t(`Найдено: ${list.length}`, `Topildi: ${list.length}`);
+  const root = $('wordList');
+  root.replaceChildren();
+  for (const word of list) {
+    const row = document.createElement('div');
+    row.className = 'word';
+    const hanzi = document.createElement('div');
+    hanzi.className = 'word-hanzi';
+    hanzi.lang = 'zh-Hans';
+    hanzi.textContent = word.hanzi;
+    const info = document.createElement('div');
+    const pinyin = document.createElement('div');
+    pinyin.className = 'word-py';
+    pinyin.textContent = word.pinyin;
+    const translation = document.createElement('div');
+    translation.className = 'word-ru';
+    translation.textContent = wordTranslation(word);
+    info.append(pinyin, translation);
+    if (progress[word.id]) {
+      const mark = document.createElement('div');
+      mark.className = 'word-mark';
+      mark.textContent = progress[word.id] === 'hard' ? t('↺ Ещё учу', '↺ Hali o‘rganyapman') : t('✓ Помню', '✓ Esimda');
+      info.append(mark);
+    }
+    const sound = document.createElement('button');
+    sound.textContent = '♪';
+    sound.setAttribute('aria-label', t(`Прослушать ${word.hanzi}`, `${word.hanzi} talaffuzini tinglash`));
+    sound.onclick = () => pronunciation.play(word);
+    row.append(hanzi, info, sound);
+    root.append(row);
+  }
+}
 $('search').oninput=renderDict;
 window.addEventListener('storage', event => {
-  if (event.key === key) {
-    try { progress = JSON.parse(event.newValue || '{}'); } catch { progress = {}; }
-    if (!progress || typeof progress !== 'object' || Array.isArray(progress)) progress = {};
+  if (event.key === key || event.key === null || event.key?.startsWith(markPrefix)) {
+    progress = loadProgress();
     if (view === 'units') renderUnits();
     else if (view === 'dictionary') renderDict();
-    else if (view === 'study') render();
+    else if (view === 'study') counts();
   }
   if (event.key === languageKey && ['ru','uz'].includes(event.newValue)) changeLanguage(event.newValue);
 });
@@ -146,8 +209,8 @@ function routeFromHash() {
 }
 window.addEventListener('hashchange', routeFromHash);
 window.addEventListener('pageshow', () => {
-  try { changeLanguage(localStorage.getItem(languageKey) === 'uz' ? 'uz' : 'ru'); } catch {}
+  changeLanguage(readLanguage());
 });
 const initialView = ['units','study','pinyin','dictionary'].includes(location.hash.slice(1)) ? location.hash.slice(1) : (restoredUnit ? 'study' : 'units');
 if (!location.hash) history.replaceState(null, '', `#${initialView}`);
-renderLanguage();start(true);navigate(initialView,false);if('serviceWorker'in navigator)navigator.serviceWorker.register('./sw.js').catch(()=>{});
+renderLanguage();if(!restoreDeck())start(true);navigate(initialView,false);if('serviceWorker'in navigator)navigator.serviceWorker.register('./sw.js').catch(()=>{});

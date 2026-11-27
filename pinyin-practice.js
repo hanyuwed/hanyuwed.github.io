@@ -29,6 +29,7 @@ export function matchesPinyin(answer, expected) {
 }
 
 export function createPinyinPractice(root, t) {
+  const storageKey = 'hanyu-pinyin-v1';
   const input = root.querySelector('#pinyinAnswer');
   const check = root.querySelector('#pinyinCheck');
   const show = root.querySelector('#pinyinShow');
@@ -49,6 +50,27 @@ export function createPinyinPractice(root, t) {
   let queue = [];
   let index = 0;
   let result = '';
+
+  function save() {
+    HanyuCourse.writeStored(storageKey, {selection, kind, ids:queue.map(word => word.id), index, result, draft:input.value});
+  }
+
+  function restore() {
+    const stored = HanyuCourse.readStored(storageKey);
+    if (!stored || stored.selection !== selection || !Array.isArray(stored.ids) ||
+        !['all','characters','words'].includes(stored.kind) || !Number.isInteger(stored.index) ||
+        stored.index < 0 || stored.index > stored.ids.length) return false;
+    const wordsById = new Map(source.map(word => [word.id, word]));
+    if (!stored.ids.every(id => wordsById.has(id))) return false;
+    kind = stored.kind;
+    queue = stored.ids.map(id => wordsById.get(id));
+    index = stored.index;
+    result = ['empty','correct','incorrect','revealed'].includes(stored.result) ? stored.result : '';
+    input.value = typeof stored.draft === 'string' ? stored.draft : '';
+    for (const filter of filters) filter.setAttribute('aria-pressed', String(filter.dataset.pinyinKind === kind));
+    renderQuestion();
+    return true;
+  }
 
   function renderQuestion() {
     const word = queue[index];
@@ -79,6 +101,7 @@ export function createPinyinPractice(root, t) {
     result = '';
     input.value = '';
     renderQuestion();
+    save();
   }
 
   function start() {
@@ -105,6 +128,7 @@ export function createPinyinPractice(root, t) {
   input.addEventListener('input', () => {
     result = '';
     renderQuestion();
+    save();
   });
   function checkAnswer() {
     const word = queue[index];
@@ -115,6 +139,7 @@ export function createPinyinPractice(root, t) {
     else result = matchesPinyin(answer, word.pinyin) ? 'correct' : 'incorrect';
 
     renderQuestion();
+    save();
     if (result === 'correct') next.focus();
     else input.focus();
   }
@@ -127,6 +152,7 @@ export function createPinyinPractice(root, t) {
   show.addEventListener('click', () => {
     result = 'revealed';
     renderQuestion();
+    save();
     next.focus();
   });
   next.addEventListener('click', () => {
@@ -146,7 +172,7 @@ export function createPinyinPractice(root, t) {
     if (selection !== newSelection) {
       selection = newSelection;
       source = words.filter(word => word.pinyin.trim());
-      start();
+      if (!restore()) start();
     } else {
       renderQuestion();
     }

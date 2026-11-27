@@ -1,27 +1,16 @@
 'use strict';
 
-const languageKey = 'hanyu-language-v1';
+const {languageKey, readLanguage, readStored:saved, writeStored} = HanyuCourse;
 const prefix = 'hanyuwed:it:';
-const keys = {units: prefix + 'units:v1', session: prefix + 'session:v1', word: id => prefix + 'progress:v1:' + id};
+const keys = {units: prefix + 'units:v1', deck: prefix + 'deck:v1', session: prefix + 'session:v1', word: id => prefix + 'progress:v1:' + id};
 const $ = id => document.getElementById(id);
 const content = $('content');
 const esc = value => String(value ?? '').replace(/[&<>"']/g, c => ({
   '&':'&amp;', '<':'&lt;', '>':'&gt;', '"':'&quot;', "'":'&#39;'
 }[c]));
 
-function saved(key, fallback) {
-  try { return JSON.parse(localStorage.getItem(key)) ?? fallback; }
-  catch { return fallback; }
-}
-
 function write(key, value) {
-  try { localStorage.setItem(key, JSON.stringify(value)); }
-  catch { storageWarning(); }
-}
-
-function readLanguage() {
-  try { return localStorage.getItem(languageKey) === 'uz' ? 'uz' : 'ru'; }
-  catch { return 'ru'; }
+  if (!writeStored(key,value)) storageWarning();
 }
 
 function storageWarning() {
@@ -43,7 +32,7 @@ const views = {
   dictionary: ['Словарь','Lug‘at']
 };
 let view = 'topics';
-let deck = null;
+let deck = restoreDeck();
 let practiceUnit = [...chosen][0] ?? 0;
 let mode = 'grammar';
 let amount = 10;
@@ -157,7 +146,8 @@ function render() {
   }
   $('heading').textContent = t(...views[view]);
   $('navigation').innerHTML = Object.entries(views).map(([id,names]) =>
-    button(t(...names),'route',id,'',id === view ? 'aria-current="page"' : '')).join('');
+    button(t(...(HanyuCourse.labels[id === 'topics' ? 'units' : id] || names)),
+      'route',id,'',id === view ? 'aria-current="page"' : '')).join('');
   $('audio-status').textContent = '';
   content.innerHTML = ({topics:renderTopics,cards:renderCards,practice:renderPractice,dictionary:renderDictionary})[view]();
 }
@@ -197,6 +187,21 @@ function renderTopics() {
 
 function beginDeck(hard, direction = deck?.direction || 'from-it') {
   deck = {hard,direction,entries:hard ? hardWords() : selectedWords(),index:0,opened:new Set()};
+  saveDeck();
+}
+
+function restoreDeck() {
+  const value = saved(keys.deck,null);
+  if (!value || !Array.isArray(value.ids) || !Array.isArray(value.opened) || !Number.isInteger(value.index) ||
+      !Array.isArray(value.units) || value.units.join() !== [...chosen].join()) return null;
+  const entries = value.ids.map(id => wordById.get(id)).filter(Boolean);
+  return {hard:value.hard === true,direction:value.direction === 'to-it' ? 'to-it' : 'from-it', entries,
+    index:Math.max(0,Math.min(value.index,entries.length)),opened:new Set(value.opened)};
+}
+
+function saveDeck() {
+  write(keys.deck, deck ? {units:[...chosen],hard:deck.hard,direction:deck.direction,index:deck.index,
+    ids:deck.entries.map(word => word.id),opened:[...deck.opened]} : null);
 }
 
 function nounForms(word) {
@@ -429,13 +434,14 @@ function renderDictionary() {
 }
 
 function dictionaryRows() {
-  const find = italianSearch(query).replaceAll('ё','е');
-  const rows = IT_WORDS.filter(word => {
+  const scope = IT_WORDS.filter(word => {
     if ((dictHard && progress.get(word.id) !== 'hard') ||
         (dictUnit !== 'all' && !word.sources.some(source => source.unit === Number(dictUnit)))) return false;
-    return [word.it,word.ru,word.uz,word.forms?.singular,word.forms?.plural,...(word.aliases || [])].some(
-      text => text && italianSearch(text).replaceAll('ё','е').includes(find));
+    return true;
   });
+  const rows = HanyuCourse.rankedDictionary(scope, query,
+    word => [word.it,word.ru,word.uz,word.forms?.singular,word.forms?.plural,...(word.aliases || [])],
+    text => HanyuCourse.normalizeSearch(italianSearch(text)));
   if (!rows.length) return '<p>' + t('Слова не найдены.','So‘z topilmadi.') + '</p>';
   return '<p class="meta">' + t('Найдено · ','Topildi · ') + rows.length + '</p>' +
     rows.slice(0,dictLimit).map(word => {
@@ -479,6 +485,7 @@ document.addEventListener('click',event => {
     else chosen.add(unit);
     deck = null;
     write(keys.units,[...chosen]);
+    saveDeck();
     render();
     content.querySelector('[data-action="unit"][data-value="' + unit + '"]')?.focus();
     return;
@@ -545,9 +552,11 @@ document.addEventListener('click',event => {
   if (action === 'word-hard') {
     setProgress(value,progress.get(value) === 'hard' ? null : 'hard');
     deck = null;
+    saveDeck();
     updateDictionary();
     return;
   }
+  if (['flip','card-move','grade'].includes(action)) saveDeck();
   render();
   if (action === 'flip') content.querySelector('[data-action="flip"]')?.focus();
 });
