@@ -116,9 +116,10 @@ function shuffle(values) {
   return result;
 }
 function button(label, action, options = {}) {
-  const { value = '', primary = false, disabled = false, pressed, raw = false } = options;
+  const { value = '', primary = false, disabled = false, pressed, raw = false, ariaLabel } = options;
   return '<button type="button" class="' + (primary ? 'primary' : 'btn') + '" data-action="' + action +
     '" data-value="' + escape(value) + '"' + (disabled ? ' disabled' : '') +
+    (ariaLabel ? ' aria-label="' + escape(ariaLabel) + '"' : '') +
     (pressed === undefined ? '' : ' aria-pressed="' + pressed + '"') + '>' + (raw ? label : escape(label)) + '</button>';
 }
 function select(id, label, options, current) {
@@ -488,11 +489,14 @@ function updateDictionary() {
   $('word-list').innerHTML = results.length ? results.map(entry => {
     const hard = marks.get(entry.id) === 'hard';
     const lesson = entry.units.map(id => countUnit(id)).join(' · ');
-    return '<details class="dictionary-item" data-id="' + entry.id + '"><summary>' +
+    const sound = button('♪','play',{
+      value:entry.id, ariaLabel:t(`Прослушать ${entry.ar}`,`${entry.ar} talaffuzini tinglash`)
+    });
+    return '<div class="dictionary-item"><details data-id="' + escape(entry.id) + '"><summary>' +
       arabic(entry.ar) + '<span>' + escape(translation(entry)) + '</span></summary><p class="meta">' +
       escape(lesson) + '</p><p>' + escape(entry[lang].join(' · ')) + '</p><div class="wrap below">' +
       button(hard ? t('Убрать из трудных','Qiyinlardan olib tashlash') : t('Ещё учу','Hali o‘rganyapman'),'dictionary-mark',
-        {value:entry.id,pressed:hard}) + soundButton(entry) + '</div></details>';
+        {value:entry.id,pressed:hard}) + '</div></details>' + sound + '</div>';
   }).join('') : '<p>' + t('По этому запросу карточек нет.','Bu so‘rovga mos kartochka topilmadi.') + '</p>';
 }
 function countUnit(id) {

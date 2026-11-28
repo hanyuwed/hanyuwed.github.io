@@ -28,7 +28,9 @@ footer a { color:var(--green); }
 .token-answer { border:1px solid var(--line); border-radius:8px; padding:6px; background:var(--bg); }
 .option-gap { margin-top:12px; }
 #feedback:empty { display:none; }
-.dictionary-item { border-bottom:1px solid var(--line); margin:0; padding:9px 0; }
+.dictionary-item { display:grid; grid-template-columns:minmax(0,1fr) auto; align-items:start; gap:8px; }
+.dictionary-item > details { min-width:0; margin:0; }
+.dictionary-item > button { width:44px; padding:0; }
 .dictionary-item summary { display:grid; grid-template-columns:minmax(0,1fr) minmax(0,1.3fr); align-items:center; gap:12px; padding:3px 0; }
 .dictionary-item .meta { margin:6px 0; }
 .lesson-box { padding:15px 17px; margin:12px 0; }

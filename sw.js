@@ -1,6 +1,6 @@
 const BASE=new URL(self.registration.scope);
 const CACHE_PREFIX=`hanyuwed:${BASE.pathname}:`;
-const CACHE=CACHE_PREFIX+'v19';
+const CACHE=CACHE_PREFIX+'v20';
 const MEDIA_CACHE='hanyuwed-media:'+BASE.pathname;
 const assetUrl=path=>new URL(path,BASE).href;
 const PAGES=new Map([
@@ -17,7 +17,7 @@ const ASSETS=[
   'manifest.webmanifest','icon.svg','icon-192.png','icon-512.png','apple-touch-icon.png',
   'fr/','fr/index.html','fr/styles.css','fr/course-data.js','fr/grammar.js','fr/answers.js','fr/app.js?v=2','fr/audio-index.js',
   'ko/','ko/index.html','ko/styles.css','ko/data.js','ko/answers.js','ko/app.js','ko/audio-index.js',
-  'ar/','ar/index.html','ar/styles.css','ar/data.js','ar/answers.js','ar/app.js?v=2','ar/speech-data.js',
+  'ar/','ar/index.html','ar/styles.css?v=2','ar/data.js','ar/answers.js','ar/app.js?v=3','ar/speech-data.js',
   'it/','it/index.html','it/styles.css','it/course-data.js','it/grammar.js','it/answers.js','it/audio-index.js','it/app.js',
   'es/','es/index.html','es/styles.css','es/course-data.js','es/grammar.js','es/answers.js','es/audio-index.js','es/app.js',
 ].map(assetUrl);
