@@ -85,66 +85,21 @@ function setProgress(id, value, total) {
   $(id).max = total;
   $(id).value = value;
 }
-let statusTimer;
-let activeRecording;
-function status(message) {
-  clearTimeout(statusTimer);
-  text('status', message);
-  show('status', Boolean(message));
-  if (message) statusTimer = setTimeout(() => status(''), 5000);
-}
+const pronunciation = HanyuPlayback.createPlayer();
 function stopAudio() {
-  activeRecording?.pause();
-  activeRecording = null;
-  window.speechSynthesis?.cancel();
-  status('');
+  pronunciation.stop();
 }
 function koreanVoice() {
   return window.speechSynthesis?.getVoices().find(item => /^ko(?:[-_]|$)/i.test(item.lang));
 }
-function speakWithVoice(ko) {
-  const voice = koreanVoice();
-  if (!voice || !window.SpeechSynthesisUtterance) {
-    status(t('Для озвучки добавь корейский голос в настройках устройства.', 'Tinglash uchun qurilma sozlamalarida koreyscha ovozni qo‘sh.'));
-    return;
-  }
-  const utterance = new SpeechSynthesisUtterance(ko);
-  utterance.voice = voice;
-  utterance.lang = voice.lang;
-  utterance.rate = .86;
-  utterance.onerror = event => {
-    if (event.error !== 'interrupted' && event.error !== 'canceled') {
-      status(t('Голос не запустился. Попробуй ещё раз.', 'Ovoz boshlanmadi. Yana urinib ko‘r.'));
-    }
-  };
-  window.speechSynthesis.speak(utterance);
-}
-function speak(ko) {
-  stopAudio();
+function speak(ko, origin) {
   const path = KO_AUDIO[ko.trim()];
-  if (!path) {
-    speakWithVoice(ko);
-    return;
-  }
-  const recording = new Audio(new URL(path, import.meta.url).href);
-  activeRecording = recording;
-  status(t('Загружается запись…','Audio yuklanmoqda…'));
-  recording.onended = () => {
-    if (activeRecording !== recording) return;
-    activeRecording = null;
-    status('');
-  };
-  recording.play().then(() => {
-    if (activeRecording === recording) status(t('Воспроизведение…','Ijro etilmoqda…'));
-  }).catch(() => {
-    if (activeRecording !== recording) return;
-    activeRecording = null;
-    if (koreanVoice() && window.SpeechSynthesisUtterance) {
-      speakWithVoice(ko);
-      return;
+  pronunciation.play({
+    src:path && new URL(path,import.meta.url).href, origin,
+    fallback:() => {
+      const voice = koreanVoice();
+      return voice && window.SpeechSynthesisUtterance ? {text:ko,voice} : null;
     }
-    status(t('Запись не загрузилась. Проверь подключение к интернету и попробуй снова.',
-      'Audio yuklanmadi. Internetga ulanishni tekshir va qayta urinib ko‘r.'));
   });
 }
 window.speechSynthesis?.addEventListener('voiceschanged', () => {
@@ -553,7 +508,7 @@ function renderDictionary() {
     const audio = node('button', 'btn', '♪');
     audio.type = 'button';
     audio.setAttribute('aria-label', t(`Прослушать ${word.hangul}`, `${word.hangul} talaffuzini tinglash`));
-    audio.onclick = () => speak(word.spoken);
+    audio.onclick = () => speak(word.spoken,audio);
     const soundGroup = node('div', '', '');
     soundGroup.append(audio);
     if (word.forms[0] === '영') {
@@ -561,7 +516,7 @@ function renderDictionary() {
       const other = node('button', 'btn', '♪ 공');
       other.type = 'button';
       other.lang = 'ko';
-      other.onclick = () => speak('공');
+      other.onclick = () => speak('공',other);
       soundGroup.append(other);
     }
     row.append(hangul, parts, soundGroup);
@@ -670,8 +625,8 @@ $('flash').onclick = () => {
   persistCards();
   renderCards();
 };
-$('card-audio').onclick = () => speak(cards.queue[cards.index].spoken);
-$('other-audio').onclick = () => speak('공');
+$('card-audio').onclick = event => speak(cards.queue[cards.index].spoken,event.currentTarget);
+$('other-audio').onclick = event => speak('공',event.currentTarget);
 $('previous-card').onclick = () => moveCard(-1);
 $('next-card').onclick = () => moveCard(1);
 $('again').onclick = () => moveCard(1, 'hard');
@@ -715,7 +670,7 @@ $('answer').addEventListener('input', () => {
   persistPractice();
   renderPractice();
 });
-$('listen-question').onclick = () => speak(currentTask().audio);
+$('listen-question').onclick = event => speak(currentTask().audio,event.currentTarget);
 $('show').onclick = () => {
   if (practice.completed) return;
   practice.result = 'shown';
@@ -765,7 +720,7 @@ $('clear-syllable').onclick = () => {
   text('syllable-result', '');
   text('syllable-status', '');
 };
-for (const button of document.querySelectorAll('[data-read]')) button.onclick = () => speak(button.dataset.read);
+for (const button of document.querySelectorAll('[data-read]')) button.onclick = () => speak(button.dataset.read,button);
 localize();
 restoreCards();
 restorePractice();

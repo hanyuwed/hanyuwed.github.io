@@ -90,8 +90,7 @@ const cardsKey = PREFIX + 'cards:v1';
 const practiceKey = forMode => PREFIX + 'practice:v1:' + forMode;
 let settings = {...defaultSettings};
 let voices = [];
-let spoken = null;
-let recordedAudio = null;
+const pronunciation = HanyuPlayback.createPlayer();
 let soundStatus = '';
 let topicFocus = null;
 
@@ -164,12 +163,7 @@ const ORIGINAL_EXAMPLES = [
 ];
 
 function stopSpeech() {
-  if (recordedAudio) {
-    recordedAudio.pause();
-    recordedAudio = null;
-  }
-  if (spoken && 'speechSynthesis' in window) window.speechSynthesis.cancel();
-  spoken = null;
+  pronunciation.stop();
 }
 
 function updateVoices() {
@@ -188,56 +182,14 @@ const speechText = text => variants(text)[0].replaceAll('…','').trim();
 const recordingFor = text => typeof FR_AUDIO === 'object' ? FR_AUDIO[speechText(text)] : undefined;
 const hasFrenchVoice = () => voices.length && 'SpeechSynthesisUtterance' in window;
 
-function say(text, target = $('sound-status')) {
+function say(text, origin) {
   updateVoices();
-  stopSpeech();
-  const setStatus = message => {
-    soundStatus = message;
-    if (target?.isConnected) target.textContent = message;
-  };
-  const source = recordingFor(text);
-  const speakWithBrowser = () => {
-    if (!hasFrenchVoice()) {
-      setStatus(source ? t('Запись не загрузилась. Проверь подключение.', 'Audio yuklanmadi. Internet aloqasini tekshir.') :
-        t('Для этого текста нет записи или доступного голоса.', 'Bu matn uchun audio yoki ovoz mavjud emas.'));
-      return;
-    }
-    const voice = voices.find(voice => voice.lang === 'fr-FR') || voices[0];
-    const utterance = new SpeechSynthesisUtterance(speechText(text));
-    utterance.lang = voice.lang;
-    utterance.voice = voice;
-    utterance.rate = .89;
-    utterance.onend = () => { if (spoken === utterance) { spoken = null; setStatus(''); } };
-    utterance.onerror = () => {
-      if (spoken !== utterance) return;
-      spoken = null;
-      setStatus(t('Не удалось воспроизвести звук.', 'Ovozni ijro etib bo‘lmadi.'));
-    };
-    spoken = utterance;
-    setStatus(t('Воспроизведение…','Ijro etilmoqda…'));
-    window.speechSynthesis.speak(utterance);
-  };
-  if (!source) {
-    speakWithBrowser();
-    return;
-  }
-  const audio = new Audio(source);
-  recordedAudio = audio;
-  audio.onended = () => {
-    if (recordedAudio !== audio) return;
-    recordedAudio = null;
-    setStatus('');
-  };
-  const failed = () => {
-    if (recordedAudio !== audio) return;
-    recordedAudio = null;
-    speakWithBrowser();
-  };
-  audio.onerror = failed;
-  setStatus(t('Загружается запись…','Audio yuklanmoqda…'));
-  audio.play().then(() => {
-    if (recordedAudio === audio) setStatus(t('Воспроизведение…','Ijro etilmoqda…'));
-  }).catch(failed);
+  pronunciation.play({
+    src:recordingFor(text), origin,
+    fallback:() => hasFrenchVoice() ? {
+      text:speechText(text), voice:voices.find(voice=>voice.lang==='fr-FR') || voices[0]
+    } : null
+  });
 }
 
 function anchor(view, name, selection) {
@@ -980,7 +932,7 @@ document.addEventListener('click',event=>{
   if (!button) return;
   const {action,id,text,letter} = button.dataset;
   if (action==='sound') {
-    say(text,button.closest('dialog')?.querySelector('[role=status]') || undefined);
+    say(text,button);
     return;
   }
   if (action==='help') {
@@ -989,7 +941,7 @@ document.addEventListener('click',event=>{
       t('Закрыть','Yopish') + '">×</button><h2 id="help-title">' + t('Как пользоваться','Qanday foydalaniladi?') +
       '</h2><p>' + t('Выбери темы для карточек или открой «Практику» для письменных заданий.',
       'Kartochkalar uchun mavzularni tanla yoki yozma topshiriqlar uchun «Mashqlar»ni och.') +
-      '</p><div class="help-content stack">' + renderHints() + '</div><p class="detail" role="status"></p>';
+      '</p><div class="help-content stack">' + renderHints() + '</div>';
     dialog.showModal();
     return;
   }
@@ -1125,6 +1077,7 @@ main.addEventListener('change',event=>{
 });
 restoreCards();
 restorePractice();
+$('help-dialog').addEventListener('close',clearSound);
 updateRoute();
 
 if ('serviceWorker' in navigator) navigator.serviceWorker.register('../sw.js').catch(() => {});

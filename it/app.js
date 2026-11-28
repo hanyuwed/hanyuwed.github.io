@@ -48,7 +48,7 @@ let query = '';
 let dictUnit = 'all';
 let dictHard = false;
 let dictLimit = 35;
-let audio = null;
+const pronunciation = HanyuPlayback.createPlayer();
 const courseBase = new URL('./', location.href);
 
 function restoreSession(value) {
@@ -111,35 +111,12 @@ function player(text, slow = false, hideText = false) {
 }
 
 function stopAudio() {
-  if (!audio) return;
-  audio.pause();
-  audio = null;
+  pronunciation.stop();
 }
 
-function speak(text, slow) {
-  stopAudio();
-  const status = $('audio-status');
-  status.textContent = '';
-  if (!Object.hasOwn(IT_AUDIO,text)) {
-    status.textContent = t('Запись недоступна.','Audio mavjud emas.');
-    return;
-  }
-  const clip = new Audio(new URL('audio/' + IT_AUDIO[text] + '.mp3', courseBase).href);
-  audio = clip;
-  status.textContent = t('Загружается запись…','Audio yuklanmoqda…');
-  clip.preservesPitch = true;
-  clip.playbackRate = slow ? 0.78 : 1;
-  function failed() {
-    if (audio === clip) status.textContent = t('Запись не загрузилась. Нажми «Слушать» ещё раз.','Audio yuklanmadi. «Tinglash»ni qayta bosing.');
-  }
-  clip.addEventListener('playing',() => {
-    if (audio === clip) status.textContent = t('Воспроизведение…','Ijro etilmoqda…');
-  });
-  clip.addEventListener('ended',() => {
-    if (audio === clip) status.textContent = '';
-  });
-  clip.addEventListener('error',failed,{once:true});
-  clip.play().catch(failed);
+function speak(text, slow, origin) {
+  const src = Object.hasOwn(IT_AUDIO,text) ? new URL('audio/' + IT_AUDIO[text] + '.mp3',courseBase).href : undefined;
+  pronunciation.play({src,slow,origin});
 }
 
 function render() {
@@ -155,7 +132,6 @@ function render() {
   $('navigation').innerHTML = Object.entries(views).map(([id,names]) =>
     button(t(...(HanyuCourse.labels[id === 'topics' ? 'units' : id] || names)),
       'route',id,'',id === view ? 'aria-current="page"' : '')).join('');
-  $('audio-status').textContent = '';
   content.innerHTML = ({topics:renderTopics,cards:renderCards,practice:renderPractice,dictionary:renderDictionary})[view]();
 }
 
@@ -508,7 +484,7 @@ document.addEventListener('click',event => {
   const target = event.target.closest('button[data-action]');
   if (!target) return;
   const {action,value} = target.dataset;
-  if (action === 'audio' || action === 'audio-slow') { speak(value,action === 'audio-slow'); return; }
+  if (action === 'audio' || action === 'audio-slow') { speak(value,action === 'audio-slow',target); return; }
   if (action === 'route') { go(value); return; }
   if (action === 'open-practice') { go('practice'); return; }
   if (action === 'unit') {

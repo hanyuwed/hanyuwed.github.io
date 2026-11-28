@@ -1,5 +1,5 @@
 import {words,selectWords,shuffled,restoreUnits} from './data.js';
-import {createPronunciationPlayer} from './audio-player.js';
+import {createPronunciationPlayer} from './audio-player.js?v=2';
 import {createPinyinPractice} from './pinyin-practice.js';
 const $=id=>document.getElementById(id), key='hanyu-progress-v1';
 const {languageKey, readLanguage, readStored, writeStored, rankedDictionary, normalizeSearch} = HanyuCourse;

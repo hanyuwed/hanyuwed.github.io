@@ -84,9 +84,8 @@ let filterUnit = 0;
 let filterKind = 'all';
 let filterHard = false;
 let search = '';
-let activeAudio = null;
+const pronunciation = HanyuPlayback.createPlayer();
 let alphabet = { answer:'', index:0, feedback:'', played:false };
-let audioNote = '';
 const audioUrls = Object.values(recordings).map(path => new URL(path, import.meta.url).href);
 const audioCache = 'hanyuwed-media:' + new URL('../', import.meta.url).pathname;
 const audioDownload = { count:0, running:false, error:false, checked:false };
@@ -576,36 +575,18 @@ function soundButton(entry, dictation = false) {
   return button(t('Прослушать','Tinglash'),dictation ? 'play-question' : 'play',{value:entry.id});
 }
 function stopAudio() {
-  activeAudio?.pause();
-  activeAudio = null;
+  pronunciation.stop();
 }
-function playAudio(id, onStart) {
-  stopAudio();
-  audioNote = '';
-  showStatus();
+function playAudio(id, origin, onStart) {
   const clip = recordings[id];
-  if (!clip) {
-    audioNote = t('Для этого слова запись недоступна. Можно пропустить задание.', 'Bu so‘z uchun audio yo‘q. Topshiriqni o‘tkazib yuborish mumkin.');
-    showStatus();
-    return;
-  }
-  const audio = new Audio(new URL(clip, import.meta.url));
-  activeAudio = audio;
-  audio.play().then(() => {
-    if (activeAudio === audio) onStart?.();
-  }).catch(() => {
-    if (activeAudio !== audio) return;
-    activeAudio = null;
-    audioNote = t('Не удалось воспроизвести звук. Попробуй ещё раз.','Ovozni ijro etib bo‘lmadi. Yana urinib ko‘r.');
-    showStatus();
-  });
+  pronunciation.play({src:clip && new URL(clip,import.meta.url).href,origin,onStart});
 }
 
 const views = {units:renderUnits,alphabet:renderAlphabet,cards:renderCards,practice:renderPractice,dictionary:renderDictionary};
 function showStatus() {
   const status = $('storage-message');
-  status.textContent = audioNote || (memoryOnly ? t('Отметки сохранятся только в этой вкладке.',
-    'Belgilar faqat shu varaqda saqlanadi.') : '');
+  status.textContent = memoryOnly ? t('Отметки сохранятся только в этой вкладке.',
+    'Belgilar faqat shu varaqda saqlanadi.') : '';
   status.hidden = !status.textContent;
 }
 function restoreFocus(previous) {
@@ -640,7 +621,6 @@ function render({ focus = false } = {}) {
 }
 function changeView(next) {
   stopAudio();
-  audioNote = '';
   view = next;
   if (location.hash !== '#' + next) history.pushState(null,'','#' + next);
   render({focus:true});
@@ -655,9 +635,9 @@ function applyLocation() {
 }
 function changeLang(next) {
   if (!['ru','uz'].includes(next) || lang === next) return;
+  stopAudio();
   lang = next;
   alphabet.feedback = '';
-  audioNote = '';
   render();
 }
 function resetPools() {
@@ -713,9 +693,9 @@ document.addEventListener('click', event => {
   if (action === 'open-units') return changeView('units');
   if (action === 'focus-units') return $('content').querySelector('[data-action=unit]').focus();
   if (action === 'download-audio') { void downloadAudio(); return; }
-  if (action === 'play') return playAudio(value);
+  if (action === 'play') return playAudio(value,selectedButton);
   if (action === 'play-question' && question) {
-    return playAudio(question.entry.id,() => {
+    return playAudio(question.entry.id,selectedButton,() => {
       question.heard = true;
       saveStudy();
       const check = $('content').querySelector('[data-action=check]');
@@ -723,7 +703,7 @@ document.addEventListener('click', event => {
     });
   }
   if (action === 'letter-audio') {
-    return playAudio(alphabetQuestions[alphabet.index].audio,() => {
+    return playAudio(alphabetQuestions[alphabet.index].audio,selectedButton,() => {
       alphabet.played = true;
       render();
     });

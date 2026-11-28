@@ -65,10 +65,7 @@ let query = '';
 let dictUnit = 'all';
 let dictHard = false;
 let dictLimit = 35;
-const audio = new Audio();
-audio.preload = 'none';
-let audioRequest = 0;
-let activeAudio = false;
+const pronunciation = HanyuPlayback.createPlayer();
 const courseBase = new URL('./', location.href);
 const audioCache = 'hanyuwed-es-audio:' + new URL('../', courseBase).pathname;
 const downloaded = new Set();
@@ -138,51 +135,18 @@ function player(text, slow = false, hidden = false) {
 }
 
 function stopAudio() {
-  audioRequest++;
-  activeAudio = false;
-  audio.pause();
-  $('audio-status').textContent = '';
+  pronunciation.stop();
 }
 
 function audioUrl(text) {
   return new URL('audio/' + ES_AUDIO[text] + '.mp3', courseBase).href;
 }
 
-function speak(text, slow, onStart) {
-  stopAudio();
-  const request = audioRequest;
-  const status = $('audio-status');
-  if (!Object.hasOwn(ES_AUDIO,text)) {
-    status.textContent = t('Запись недоступна.','Audio mavjud emas.');
-    return;
-  }
-  activeAudio = true;
-  status.textContent = t('Загружается запись…','Audio yuklanmoqda…');
-  const src = typeof ES_EMBEDDED_AUDIO === 'undefined' ? audioUrl(text) :
-    'data:audio/mpeg;base64,' + ES_EMBEDDED_AUDIO[ES_AUDIO[text]];
-  if (audio.src !== src) audio.src = src;
-  else if (audio.error) audio.load();
-  audio.currentTime = 0;
-  audio.preservesPitch = true;
-  audio.playbackRate = slow ? 0.8 : 1;
-  audio.play().then(() => {
-    if (request === audioRequest) onStart?.();
-  }).catch(error => {
-    if (request !== audioRequest || error.name === 'AbortError') return;
-    status.textContent = t('Запись не загрузилась. Нажми «Слушать» ещё раз или перейди дальше.',
-      'Audio yuklanmadi. «Tinglash»ni qayta bosing yoki keyingi savolga o‘ting.');
-  });
+function speak(text, slow, origin, onStart) {
+  const src = Object.hasOwn(ES_AUDIO,text) ? (typeof ES_EMBEDDED_AUDIO === 'undefined' ? audioUrl(text) :
+    'data:audio/mpeg;base64,' + ES_EMBEDDED_AUDIO[ES_AUDIO[text]]) : undefined;
+  pronunciation.play({src,slow,origin,onStart});
 }
-
-audio.addEventListener('playing', () => {
-  if (activeAudio) $('audio-status').textContent = t('Воспроизведение · испанский (Испания)','Ijro etilmoqda · ispan tili (Ispaniya)');
-});
-audio.addEventListener('ended', () => {
-  if (activeAudio) $('audio-status').textContent = '';
-});
-audio.addEventListener('error', () => {
-  if (activeAudio) $('audio-status').textContent = t('Запись недоступна. Можно повторить загрузку.','Audio mavjud emas. Yana yuklab ko‘ring.');
-});
 
 function lessonAudio(unit) {
   const {rules,scene,model,drills} = ES_LESSONS[unit];
@@ -268,7 +232,6 @@ function render() {
   $('navigation').innerHTML = Object.entries(views).map(([id,names]) =>
     button(t(...(HanyuCourse.labels[id === 'topics' ? 'units' : id] || names)),
       'route',id,'',id === view ? 'aria-current="page"' : '')).join('');
-  $('audio-status').textContent = '';
   content.innerHTML = ({topics:renderTopics,cards:renderCards,practice:renderPractice,materials:renderMaterials,dictionary:renderDictionary})[view]();
 }
 
@@ -670,7 +633,7 @@ document.addEventListener('click',event => {
   if (action === 'audio' || action === 'audio-slow') {
     const question = view==='practice' && session && !session.done ? session.questions[session.index] : null;
     const answer = question?.audio === value ? reply() : null;
-    speak(value,action === 'audio-slow',() => {
+    speak(value,action === 'audio-slow',target,() => {
       if (!answer || answer.heard || answer.solved || answer.assisted) return;
       answer.heard = true;
       saveSession();

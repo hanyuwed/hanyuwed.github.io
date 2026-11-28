@@ -1,5 +1,7 @@
 // One persistent media element keeps playback tied to the user's tap on iPhone.
 export function createPronunciationPlayer({audio,panel,wordLabel,status,close,translate}) {
+  const speed=HanyuPlayback.addSpeedControl(audio);
+  audio.after(speed.field);
   let request=0, active=false;
   const say=(text,state)=>{status.textContent=text;status.dataset.state=state;};
   const mediaError=()=>{
@@ -19,6 +21,7 @@ export function createPronunciationPlayer({audio,panel,wordLabel,status,close,tr
     const src=new URL(`./audio/${word.id}.mp3`,import.meta.url).href;
     if(audio.getAttribute('src')!==src)audio.setAttribute('src',src);
     else if(audio.error)audio.load();
+    speed.reset();
     audio.muted=false;audio.volume=1;try{audio.currentTime=0;}catch{}
     // Do not await a fetch or voice-loading callback before this play() call.
     // Safari requires it in the original user-gesture handler.
