@@ -1,9 +1,23 @@
 import { entries, units } from './data.js';
-import { approvedAnswer, bareArabic, cleanTranslation, graphemes, searchArabic } from './answers.js';
+import { approvedAnswer, bareArabic, cleanTranslation, graphemes, searchArabic } from './answers.js?v=2';
 import { recordings } from './speech-data.js';
 
 const $ = id => document.getElementById(id);
-const byId = new Map(entries.map(entry => [entry.id, entry]));
+const situationalPhrases = [
+  ['اِسْمِي مَرْيَمُ وَأَنَا طَالِبَةٌ.','Меня зовут Марьям, и я студентка.','Ismim Maryam, men talabaman.'],
+  ['عِنْدِي أَخٌ كَبِيرٌ وَأُخْتٌ صَغِيرَةٌ.','У меня есть старший брат и младшая сестра.','Mening akam va singlim bor.'],
+  ['أَدْرُسُ اللُّغَةَ الْعَرَبِيَّةَ فِي الْجَامِعَةِ.','Я изучаю арабский язык в университете.','Universitetda arab tilini o‘rganaman.'],
+  ['أَبِي طَبِيبٌ وَأُمِّي مُعَلِّمَةٌ.','Мой отец врач, а мама учительница.','Otam shifokor, onam esa o‘qituvchi.'],
+  ['أَسْكُنُ فِي شَقَّةٍ قَرِيبَةٍ مِنَ الْمَدْرَسَةِ.','Я живу в квартире рядом со школой.','Maktab yaqinidagi kvartirada yashayman.'],
+  ['الْجَوُّ بَارِدٌ فِي الْمَدِينَةِ الْيَوْمَ.','Сегодня в городе холодно.','Bugun shaharda havo sovuq.'],
+  ['أَيْنَ مَحَطَّةُ الْحَافِلَاتِ مِنْ فَضْلِكَ؟','Скажите, пожалуйста, где автобусная станция?','Ayting-chi, avtobus bekati qayerda?'],
+  ['أُرِيدُ كُوبًا مِنَ الشَّايِ مِنْ فَضْلِكَ.','Я хотел бы чашку чая, пожалуйста.','Iltimos, bir piyola choy bering.'],
+  ['كَمْ سِعْرُ هَذَا الْقَمِيصِ؟','Сколько стоит эта рубашка?','Bu ko‘ylak qancha turadi?'],
+  ['أَشْعُرُ بِأَلَمٍ فِي رَأْسِي.','У меня болит голова.','Boshim og‘riyapti.'],
+  ['أَلْعَبُ كُرَةَ الْقَدَمِ مَعَ أَصْدِقَائِي.','Я играю в футбол с друзьями.','Do‘stlarim bilan futbol o‘ynayman.'],
+  ['أَسْتَيْقِظُ فِي السَّاعَةِ السَّابِعَةِ صَبَاحًا.','Я просыпаюсь в семь часов утра.','Ertalab soat yettida uyg‘onaman.']
+].map(([ar,ru,uz],index)=>({id:'situation-'+(index+1),ar,ru:[ru],uz:[uz],kind:'phrase',units:[index+1]}));
+const byId = new Map([...entries,...situationalPhrases].map(entry => [entry.id, entry]));
 const solo = document.documentElement.hasAttribute('data-standalone');
 const prefix = solo ? 'hanyuwed:ar:preview:' : 'hanyuwed:ar:manhaj-a1:';
 const languageKey = solo ? prefix + 'language' : HanyuCourse.languageKey;
@@ -35,8 +49,20 @@ const tabs = {
 const modes = {
   choice: ['Выбрать перевод','Tarjimani tanlash'], meaning: ['Написать перевод','Tarjima yozish'],
   writing: ['Написать по-арабски','Arabcha yozish'], tokens: ['Собрать выражение','Iborani tuzish'],
-  marks: ['Поставить огласовку','Harakat qo‘yish'], letters: ['Собрать слово из букв','So‘zni harflardan tuzish'],
+  marks: ['Краткие гласные на слух','Qisqa unlilarni eshitish'], letters: ['Собрать слово из букв','So‘zni harflardan tuzish'],
   dictation: ['Диктант','Diktant']
+};
+const practiceGroups = {
+  translation:[['Перевод','Tarjima'],['choice','meaning']],
+  writing:[modes.writing,['writing']],
+  assemble:[['Собрать','Yig‘ish'],['tokens','letters']],
+  marks:[modes.marks,['marks']],
+  dictation:[modes.dictation,['dictation']]
+};
+const translationVariants = {
+  'مَرِح':{ru:['жизнерадостный']},
+  'مَرْحَبًا':{ru:['приветствую']},
+  'كَيْفَ حَالُكَ؟':{ru:['как поживаешь','как ты себя чувствуешь'],uz:['Qalaysan','Qalaysiz']}
 };
 const types = { all:['Все','Hammasi'], word:['Слова','So‘zlar'], phrase:['Выражения','Iboralar'] };
 const saved = readSettings();
@@ -105,7 +131,9 @@ const count = (index, total) => t(index + ' из ' + total, index + ' / ' + tota
 const activePool = () => entries.filter(entry => entry.units.some(id => selected.has(id)) &&
   (kind === 'all' || entry.kind === kind));
 const hardPool = () => activePool().filter(entry => marks.get(entry.id) === 'hard');
-const practice = () => practices.get(lang);
+const practiceKey = (language = lang, type = mode) => [language,[...selected].sort((a,b)=>a-b).join(','),kind,type,size].join(':');
+const practice = () => practices.get(practiceKey());
+const translationAnswers = entry => [...entry[lang],...(translationVariants[entry.ar]?.[lang] || [])];
 
 function shuffle(values) {
   const result = [...values];
@@ -303,7 +331,7 @@ function renderCards() {
     button(t('Вперёд','Oldinga'),'next-card') + '</div>';
 }
 
-function selectMark(entry) {
+function selectMark(entry, preview = false) {
   const parts = graphemes(entry.ar);
   let position = 0;
   const candidates = [];
@@ -316,7 +344,7 @@ function selectMark(entry) {
     }
   });
   if (!candidates.length) return null;
-  const selected = candidates[Math.floor(Math.random() * candidates.length)];
+  const selected = candidates[preview ? 0 : Math.floor(Math.random() * candidates.length)];
   parts[selected.index] = parts[selected.index].replace(selected.sign, '');
   return { ...selected, prompt:parts.join('') };
 }
@@ -326,9 +354,14 @@ function chipSet(words) {
 function makeQuestion(entry, pool) {
   let options = [];
   if (mode === 'choice') {
-    const accepted = new Set(entry[lang].map(cleanTranslation));
+    const accepted = new Set(translationAnswers(entry).map(cleanTranslation));
     const distractors = [];
-    for (const alternative of shuffle(pool)) {
+    const form = item => item.kind === 'phrase' || /^(я|ты|он|она|мы|вы|они|men|sen|u|biz|siz|ular)\s/iu.test(translation(item));
+    const related = item => item.units.some(id=>entry.units.includes(id));
+    const sameForm = item => form(item) === form(entry);
+    const candidates = shuffle(pool).sort((left,right)=>
+      (Number(related(right))*2+Number(sameForm(right))) - (Number(related(left))*2+Number(sameForm(left))));
+    for (const alternative of candidates) {
       const label = cleanTranslation(translation(alternative));
       if (accepted.has(label) || alternative[lang].some(x => accepted.has(cleanTranslation(x)))) continue;
       accepted.add(label);
@@ -343,32 +376,50 @@ function makeQuestion(entry, pool) {
     draft:'', result:null, heard:false };
 }
 function eligible(entry) {
-  if (mode === 'tokens') return entry.ar.split(' ').length > 1 && entry.kind === 'phrase';
+  if (mode === 'tokens') return entry.ar.split(' ').length > 1;
   if (mode === 'letters') return !bareArabic(entry.ar).includes(' ');
-  if (mode === 'marks') return Boolean(recordings[entry.id]) && Boolean(selectMark(entry));
+  if (mode === 'marks') return Boolean(recordings[entry.id]) && Boolean(selectMark(entry,true));
+  if (mode === 'dictation') return Object.hasOwn(recordings,entry.id);
   return true;
+}
+function practicePool() {
+  const contextual = ['tokens','meaning','choice'].includes(mode) && kind !== 'word' ?
+    situationalPhrases.filter(entry=>selected.has(entry.units[0])) : [];
+  return [...activePool(),...contextual].filter(eligible);
 }
 function startPractice(repeat = false) {
   const prior = practice();
-  const pool = repeat ? prior.queue.filter(q => q.result !== 'correct').map(q => q.entry) : activePool().filter(eligible);
+  const available = practicePool();
+  const pool = repeat ? prior.queue.filter(q => q.result !== 'correct').map(q => q.entry) : available;
   if (!pool.length) return false;
   const list = shuffle(pool).slice(0, size || pool.length);
-  const choicePool = [...pool, ...entries.filter(entry => !pool.includes(entry))];
-  practices.set(lang, { mode, index:0, queue:list.map(entry => makeQuestion(entry, choicePool)) });
+  const choicePool = [...new Set([...pool,...available,...entries])];
+  practices.set(practiceKey(), { mode, index:0, queue:list.map(entry => makeQuestion(entry, choicePool)) });
   return true;
 }
 
+function questionAnswer(question) {
+  return ['tokens','letters'].includes(mode) ?
+    question.chips.map(id=>question.parts.find(part=>part.id===id).text).join(mode==='tokens'?' ':'') : question.draft;
+}
+
 function renderPractice() {
-  const options = '<div class="controls">' + select('mode',t('Упражнение','Mashq'),controlOptions(modes),mode) +
-    select('size',t('Вопросов','Savollar'),[[10,'10'],[20,'20'],[0,t('Все','Hammasi')]],size) + '</div>';
+  const group = Object.keys(practiceGroups).find(id=>practiceGroups[id][1].includes(mode));
+  const typesInGroup = practiceGroups[group][1];
+  const total = practicePool().length;
+  const questionCount = Math.min(total,size||total);
+  const scope = [...selected].map(id=>countUnit(id)).join(' · ') || t('Уроки не выбраны','Darslar tanlanmagan');
+  const options = '<div class="controls">' + select('practice-group',t('Упражнение','Mashq'),
+    Object.entries(practiceGroups).map(([id,[label]])=>[id,t(...label)]),group) +
+    (typesInGroup.length>1?select('mode',t('Вариант','Variant'),typesInGroup.map(id=>[id,t(...modes[id])]),mode):'') +
+    select('size',t('Вопросов','Savollar'),[[10,'10'],[20,'20'],[0,t('Все','Hammasi')]],size) + '</div>' +
+    '<div class="wrap"><span class="meta">'+escape(scope)+'</span>'+button(t('Выбрать уроки','Darslarni tanlash'),'open-units')+'</div>'+
+    '<p class="meta" role="status">'+t('Заданий: ','Mashqlar: ')+questionCount+' / '+total+'</p>';
   const session = practice();
   if (!session || session.mode !== mode) {
-    const total = activePool().filter(eligible).length;
-    const note = total ? t('Подходящих карточек: ','Mos kartochkalar: ') + total :
-      t('Выбери уроки с подходящим материалом.','Mos materialli darslarni tanla.');
-    return options + '<div class="surface empty"><p>' + escape(note) + '</p>' +
-      button(t('Начать','Boshlash'),'start-practice',{primary:true,disabled:!total}) +
-      (!total ? button(t('К урокам','Darslarga'),'open-units') : '') + '</div>';
+    return options + '<div class="surface empty">' + (!total?
+      '<p>'+t('Выбери уроки с подходящим материалом.','Mos materialli darslarni tanla.')+'</p>':'')+
+      button(t('Начать','Boshlash'),'start-practice',{primary:true,disabled:!total}) + '</div>';
   }
   const current = session.queue[session.index];
   if (!current) {
@@ -377,10 +428,19 @@ function renderPractice() {
     const skipped = results.filter(result => result === 'skip' || result === null).length;
     const tipped = results.filter(result => result === 'hint').length;
     const errors = results.length - correct - skipped - tipped;
+    const review = session.queue.filter(q=>q.result!=='correct').map(q=>{
+      const answer = questionAnswer(q);
+      const model = mode==='marks'?arabic('ـ'+q.target.sign):['choice','meaning'].includes(mode)?
+        escape(translation(q.entry)):arabic(q.entry.ar);
+      return '<li>'+arabic(q.entry.ar)+' · '+escape(translation(q.entry))+
+        '<p>'+t('Твой ответ','Javobing')+' · '+escape(answer||'—')+'</p>'+
+        '<p>'+t('Образец','Namuna')+' · '+model+'</p></li>';
+    }).join('');
     return options + '<div class="surface empty"><h2>' + t('Результат','Natija') + '</h2><p>' +
       t('Верно: ','To‘g‘ri: ') + count(correct, results.length) + ' · ' + t('Ошибки: ','Xato: ') + errors +
       ' · ' + t('С подсказкой: ','Yordam bilan: ') + tipped + ' · ' + t('Пропущено: ','O‘tkazilgan: ') + skipped +
-      '</p><div class="wrap">' + button(t('Повторить ошибки и пропуски','Xato va o‘tkazilganlarni takrorlash'),'retry-practice',
+      '</p>'+(review?'<details><summary>'+t('Разбор заданий','Mashqlar tahlili')+'</summary><ol>'+review+'</ol></details>':'')+
+      '<div class="wrap">' + button(t('Повторить задания','Mashqlarni takrorlash'),'retry-practice',
         {primary:true,disabled:correct===results.length}) + button(t('Новая практика','Yangi mashq'),'start-practice') +
       button(t('Назад','Orqaga'),'prev-question') + '</div></div>';
   }
@@ -388,8 +448,10 @@ function renderPractice() {
   const entry = current.entry;
   let prompt = isArabic ? escape(translation(entry)) : arabic(shown(entry),'main-text');
   if (mode === 'marks') {
-    prompt = arabic(current.target.prompt, 'main-text') + '<div class="meta">' +
-      t('Сначала нажми «Прослушать», затем выбери пропущенную краткую гласную для буквы №', 'Avval «Tinglash»ni bos, so‘ng harf uchun tushirilgan qisqa unlini tanla №') +
+    const parts = graphemes(current.target.prompt).map((part,index)=>
+      index===current.target.index?'<mark class="mark-target">'+escape(part)+'</mark>':escape(part));
+    prompt = '<bdi class="ar main-text" lang="ar" dir="rtl">'+parts.join('')+'</bdi><div class="meta">' +
+      t('Прослушай и выбери краткую гласную для выделенной буквы №', 'Tingla va belgilangan harf uchun qisqa unlini tanla №') +
       current.target.pos + ' · ' + arabic(current.target.letter) + ' · ' + escape(translation(entry)) + '</div>';
   }
   if (['choice','meaning'].includes(mode) && !decorated &&
@@ -423,6 +485,7 @@ function renderPractice() {
     const rest = current.parts.filter(part => !current.chips.includes(part.id));
     input = '<div class="meta">' + t('Твой ответ','Javobing') + '</div><div class="tokens token-answer" dir="rtl">' +
       partButtons(ordered,'remove') + '</div><div class="tokens" dir="rtl">' + partButtons(rest,'add') + '</div>';
+    if (mode==='letters' && ordered.length) input += '<p>'+arabic(questionAnswer(current))+'</p>';
   } else {
     input = '<label for="typed-answer">' + t('Твой ответ','Javobing') + '</label><input spellcheck="false" autocomplete="off" autocapitalize="off" id="typed-answer" class="answer ' +
       (isArabic ? 'ar" lang="ar" dir="rtl"' : '"') + ' value="' + escape(current.draft) + '"' + (revealed ? ' readonly' : '') + '>';
@@ -430,16 +493,18 @@ function renderPractice() {
     if (isArabic && !revealed) input += '<div class="wrap letters below" dir="rtl" aria-label="' + t('Огласовки','Harakatlar') +
       '">' + Object.keys(markNames).map(value => button(arabic('ـ' + value),'insert',{raw:true,value})).join('') + '</div>';
   }
-  const solution = isArabic ? arabic(entry.ar) : escape(translation(entry));
+  const alternate = mode==='writing' && correct && bareArabic(current.draft)!==bareArabic(entry.ar);
+  const solution = alternate ? arabic(current.draft)+' · '+t('В учебнике','Darslikda')+' '+arabic(entry.ar) :
+    isArabic ? arabic(entry.ar) : escape(translation(entry));
   return options + progress(session.index+1,session.queue.length) +
     '<div class="surface practice"><div class="prompt" id="question-prompt">' + prompt + '</div>' +
-    (mode === 'dictation' || revealed || ['choice','meaning','marks'].includes(mode) ?
+    (recordings[entry.id] && (mode === 'dictation' || revealed || ['choice','meaning','marks'].includes(mode)) ?
       '<div class="wrap below">' + soundButton(entry, mode === 'dictation' || mode === 'marks') + '</div>' : '') + input +
     '<p id="feedback" role="status" data-tone="' + (correct ? 'good' : 'bad') + '">' +
     (revealed ? explanations[checked] + ' ' + solution : '') + '</p><div class="wrap option-gap">' +
     (revealed ? '' : button(t('Проверить','Tekshirish'),'check',{primary:true,disabled:['dictation','marks'].includes(mode) && !current.heard}) +
       button(t('Показать ответ','Javobni ko‘rsatish'),'hint') + button(t('Пропустить','O‘tkazish'),'skip')) +
-    button(t('Ещё учу','Hali o‘rganyapman'),'practice-hard',{pressed:marks.get(entry.id)==='hard'}) +
+    (recordings[entry.id]?button(t('Ещё учу','Hali o‘rganyapman'),'practice-hard',{pressed:marks.get(entry.id)==='hard'}):'') +
     '</div><div class="actions card-nav">' +
     button(t('Назад','Orqaga'),'prev-question',{disabled:session.index===0}) +
     button(t('Вперёд','Oldinga'),'next-question',{primary:revealed}) + '</div></div>';
@@ -451,11 +516,7 @@ function answerQuestion(question, result) {
     question.result = result;
     return true;
   }
-  let answer = question.draft;
-  if (mode === 'tokens' || mode === 'letters') {
-    answer = question.chips.map(id => question.parts.find(part => part.id === id).text)
-      .join(mode === 'tokens' ? ' ' : '');
-  }
+  const answer = questionAnswer(question);
   if (!answer.trim() || (['dictation','marks'].includes(mode) && !question.heard)) return false;
   if (mode === 'marks') {
     question.result = answer === question.target.sign ? 'correct' : 'marks';
@@ -463,7 +524,7 @@ function answerQuestion(question, result) {
   }
   const entry = question.entry;
   const arabicAnswer = ['writing','dictation','tokens','letters'].includes(mode);
-  let candidates = arabicAnswer ? [entry.ar] : entry[lang];
+  let candidates = arabicAnswer ? [entry.ar] : translationAnswers(entry);
   if (mode === 'writing') {
     const label = cleanTranslation(translation(entry));
     candidates = entries.filter(other => other[lang].some(gloss => cleanTranslation(gloss) === label))
@@ -601,7 +662,6 @@ function changeLang(next) {
 }
 function resetPools() {
   deck = null;
-  practices.clear();
   storeSettings();
   saveStudy();
 }
@@ -616,19 +676,21 @@ function saveStudy() {
 
 function restoreStudy() {
   const stored = HanyuCourse.readStored(studyKey);
-  if (!stored || !Array.isArray(stored.units) || stored.units.join() !== [...selected].join() || stored.kind !== kind) return;
+  if (!stored || !Array.isArray(stored.units)) return;
   const {cards, sessions} = stored;
-  if (Array.isArray(cards?.queue) && cards.queue.every(id => byId.has(id)) && Array.isArray(cards.revealed) &&
+  const sameSelection = stored.units.join() === [...selected].join() && stored.kind === kind;
+  if (sameSelection && Array.isArray(cards?.queue) && cards.queue.every(id => byId.has(id)) && Array.isArray(cards.revealed) &&
       Number.isInteger(cards.index) && cards.index >= 0 && cards.index <= cards.queue.length) {
     deck = {...cards, revealed:new Set(cards.revealed)};
   }
-  for (const language of ['ru','uz']) {
-    const session = sessions?.[language];
+  for (const [key,session] of Object.entries(sessions || {})) {
     if (!session || !Object.hasOwn(modes,session.mode) || !Array.isArray(session.queue) ||
         !Number.isInteger(session.index) || session.index < 0 || session.index > session.queue.length ||
         !session.queue.every(question => byId.has(question?.entry) && Array.isArray(question.chips) &&
           Array.isArray(question.parts) && Array.isArray(question.options) && typeof question.draft === 'string')) continue;
-    practices.set(language, {...session,queue:session.queue.map(question => ({...question,entry:byId.get(question.entry)}))});
+    if (['ru','uz'].includes(key) && !sameSelection) continue;
+    const id = ['ru','uz'].includes(key) ? practiceKey(key,session.mode) : key;
+    practices.set(id, {...session,queue:session.queue.map(question => ({...question,entry:byId.get(question.entry)}))});
   }
 }
 
@@ -710,7 +772,7 @@ document.addEventListener('click', event => {
     stopAudio();
     session.index = Math.max(0,Math.min(session.queue.length,session.index+(action==='prev-question'?-1:1)));
   } else if (question && ['pick-option','chip-add','chip-remove','insert','check','skip','hint','practice-hard'].includes(action)) {
-    if (action === 'practice-hard') setMark(question.entry.id,'hard');
+    if (action === 'practice-hard') setMark(question.entry.id,marks.get(question.entry.id)==='hard'?null:'hard');
     else if (question.result !== null) return;
     else if (action === 'pick-option') question.draft = value;
     else if (action === 'chip-add') question.chips.push(Number(value));
@@ -752,16 +814,14 @@ document.addEventListener('change', event => {
   if (id === 'kind') {
     kind = value;
     resetPools();
-  } else if (id === 'mode') {
+  } else if (id === 'mode' || id === 'practice-group') {
     stopAudio();
-    mode = value;
-    practices.clear();
+    mode = id === 'mode' ? value : practiceGroups[value][1][0];
     storeSettings();
     saveStudy();
   } else if (id === 'size') {
     stopAudio();
     size = Number(value);
-    practices.clear();
     storeSettings();
     saveStudy();
   } else if (id === 'filter-unit') filterUnit = Number(value);

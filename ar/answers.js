@@ -13,7 +13,7 @@ export function bareArabic(text) {
 
 export function cleanTranslation(text) {
   return text.normalize('NFC').toLowerCase().trim().replace(/[’‘ʻʼ`]/gu, "'")
-    .replace(/\s+/gu, ' ').replace(endPunctuation, '').trim();
+    .replaceAll('ё','е').replace(/\s+/gu, ' ').replace(endPunctuation, '').trim();
 }
 
 export function searchArabic(text) {

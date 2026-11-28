@@ -1,5 +1,5 @@
 import {entries, units} from './data.js';
-import {contextTasks, evaluate, forSearch, numberTasks, spellingTask} from './answers.js';
+import {contextTasks, evaluate, forSearch, numberTasks, spellingTask} from './answers.js?v=2';
 import {KO_AUDIO} from './audio-index.js';
 
 const $ = id => document.getElementById(id);
@@ -164,18 +164,26 @@ function localize() {
   updatePracticeAvailability();
 }
 function updatePracticeAvailability() {
-  const count = contextTasks(selected).length;
-  const option = $('practice-mode').querySelector('option[value="context"]');
-  option.textContent = t(`Фразы и частицы · ${count}`, `Ibora va qo‘shimchalar · ${count}`);
+  const numbers = numberTasks(chosen(), language, 'all', entries);
+  const sizes = {numbers:numbers.length, context:contextTasks(selected).length};
+  for (const [id,count] of Object.entries(sizes)) {
+    const option = $('practice-mode').querySelector(`option[value="${id}"]`);
+    option.disabled = count === 0;
+    option.textContent += ` · ${count}`;
+  }
+  for (const option of $('number-kind').options) {
+    option.disabled = !numbers.some(task => option.value === 'all' || task.type === option.value);
+  }
+  if ($('number-kind').selectedOptions[0]?.disabled) $('number-kind').value = 'all';
 }
 function updateSelection(ids, focusId) {
   selected = new Set(ids);
-  updatePracticeAvailability();
+  localize();
   cards = practice = null;
   cardMode = 'all';
   save(settingsKey, JSON.stringify([...selected]));
   persistCards();
-  persistPractice();
+  loadPracticeSetup();
   navigate('units', false);
   if (focusId) $(`unit-${focusId}`).focus({preventScroll:true});
 }
@@ -343,44 +351,57 @@ let composing = false;
 let compositionJustEnded = false;
 
 function currentTask() {
-  return practice.queue[practice.index];
+  return practice?.queue[practice.index];
 }
 function practiceTasks() {
   const mode = $('practice-mode').value;
   const words = chosen();
   if (mode === 'context') return contextTasks(selected);
   if (mode === 'numbers') return numberTasks(words, language, $('number-kind').value, entries);
-  const type = mode === 'meaning' && practiceDirection === 'translation' ? 'translation' : mode;
+  const type = mode === 'meaning' ? practiceDirection === 'translation' ? 'translation' :
+    $('practice-strict').checked ? 'spelling' : 'meaning' : mode;
   return words.map(word => spellingTask(word, language, type));
 }
 function taskKey(task) {
   return task.contextual ? task.prompt : `${task.word.id}:${task.type}`;
 }
+function setupKey() {
+  const mode = $('practice-mode').value;
+  const option = mode === 'numbers' ? $('number-kind').value :
+    mode === 'meaning' ? practiceDirection + ($('practice-strict').checked && practiceDirection === 'hangul' ? ':strict' : '') : '';
+  return [practiceKey,selectedSignature(),mode,$('practice-limit').value,option].join(':');
+}
 function persistPractice() {
   if (!practice) return clearSession(practiceKey);
-  save(practiceKey, JSON.stringify({
+  const record = JSON.stringify({
     selection:selectedSignature(),
     controls:practiceControls.map(id => $(id).value),
     direction:practiceDirection,
+    strict:$('practice-strict').checked,
     locale:language,
     queue:practice.queue.map(taskKey),
     index:practice.index,
     outcomes:practice.report.map(item => item.outcome),
+    answers:practice.report.map(item => item.answer),
     result:practice.result,
     hadMistake:practice.hadMistake,
     completed:practice.completed,
     draft:$('answer').value
-  }));
+  });
+  save(practiceKey,record);
+  save(setupKey(),record);
 }
-function restorePractice() {
-  const session = json(practiceKey);
+function restorePractice(session = json(practiceKey)) {
   if (session?.selection !== selectedSignature() || !Array.isArray(session.queue) ||
       !validPosition(session.index, session.queue.length) || !Array.isArray(session.outcomes) ||
       !Array.isArray(session.controls) || session.controls.length !== practiceControls.length) return;
   practiceControls.forEach((id, index) => {
     if ([...$(id).options].some(option => option.value === session.controls[index])) $(id).value = session.controls[index];
   });
-  practiceDirection = session.direction === 'translation' ? 'translation' : 'hangul';
+  const legacyStrict = session.controls[0] === 'spelling';
+  if (legacyStrict) $('practice-mode').value = 'meaning';
+  $('practice-strict').checked = legacyStrict || session.strict === true;
+  practiceDirection = !legacyStrict && session.direction === 'translation' ? 'translation' : 'hangul';
   const tasks = new Map(practiceTasks().map(task => [taskKey(task), task]));
   const queue = session.queue.map(key => tasks.get(key));
   const completed = session.completed === true && session.index < queue.length;
@@ -389,16 +410,24 @@ function restorePractice() {
   const staleTranslation = session.locale !== language && queue[session.index]?.reverse && !completed;
   practice = {
     queue,index:session.index,completed,
-    report:session.outcomes.map((outcome,index) => ({task:queue[index],outcome})),
+    report:session.outcomes.map((outcome,index) => ({task:queue[index],outcome,answer:session.answers?.[index] || ''})),
     result:!staleTranslation && (session.result === 'context' || Object.hasOwn(feedbackMessages,session.result)) ? session.result : '',
     hadMistake:!staleTranslation && session.hadMistake === true
   };
   $('answer').value = !staleTranslation && typeof session.draft === 'string' ? session.draft : '';
+  persistPractice();
+}
+function loadPracticeSetup() {
+  stopAudio();
+  practice = null;
+  $('answer').value = '';
+  restorePractice(json(setupKey()));
+  if (!practice) persistPractice();
 }
 function newPractice(queue) {
   if (!queue) {
     queue = randomOrder(practiceTasks());
-    if ($('practice-limit').value === '10') queue = queue.slice(0, 10);
+    if ($('practice-limit').value !== 'all') queue = queue.slice(0, Number($('practice-limit').value));
   }
   practice = {queue, index:0, report:[], result:'', hadMistake:false, completed:false};
   $('answer').value = '';
@@ -406,32 +435,48 @@ function newPractice(queue) {
 }
 
 function renderPractice() {
-  if (!practice) newPractice();
   const mode = $('practice-mode').value;
   const task = currentTask();
+  const available = practiceTasks().length;
+  const count = $('practice-limit').value === 'all' ? available : Math.min(Number($('practice-limit').value),available);
+  text('practice-scope',selected.size ? [...selected].map(nameFor).join(' · ') : t('Уроки не выбраны','Darslar tanlanmagan'));
+  text('practice-count',t('Заданий: ','Mashqlar: ')+count+' / '+available);
+  show('start-practice',!practice && count>0);
   const voiceAvailable = mode !== 'dictation' || !task || Object.hasOwn(KO_AUDIO,task.audio.trim()) || Boolean(koreanVoice());
   text('to-hangul', t('Вводить хангыль', 'Hangul yozish'));
   text('to-translation', t('Вводить перевод', 'Tarjimani yozish'));
   pressed($('to-hangul'), practiceDirection === 'hangul');
   pressed($('to-translation'), practiceDirection === 'translation');
   show('practice-directions', mode === 'meaning');
-  show('number-options', mode === 'numbers');
+  show('practice-strict-option', mode === 'meaning' && practiceDirection === 'hangul');
+  show('number-options', mode === 'numbers' && !$('number-kind').options[0].disabled);
   show('question', Boolean(task) && voiceAvailable);
-  show('practice-end', !task && practice.queue.length > 0 && voiceAvailable);
+  show('practice-end', !task && (practice?.queue.length ?? 0) > 0 && voiceAvailable);
   const notice = !voiceAvailable
     ? t('Для диктанта нужен корейский голос устройства. Выбери письменное упражнение или включи корейский голос.',
       'Diktant uchun qurilmada koreyscha ovoz kerak. Yozma mashqni tanla yoki koreyscha ovozni yoq.')
-    : !practice.queue.length
+    : !available
       ? t('В выбранных уроках нет заданий этого типа. Выбери другие уроки или вид задания.', 'Tanlangan darslarda bu turdagi mashqlar yo‘q. Boshqa dars yoki mashq turini tanla.')
       : '';
   show('practice-notice', Boolean(notice));
   text('practice-notice', notice);
+  if (!practice) return;
   if (!task || !voiceAvailable) {
     const n = outcome => practice.report.filter(item => item.outcome === outcome).length;
     text('practice-score', t(
       `С первой попытки ${n('first')} · Исправлено ${n('fixed')} · Ответ показан ${n('shown')}`,
       `Birinchi urinishda ${n('first')} · Tuzatildi ${n('fixed')} · Javob ko‘rsatildi ${n('shown')}`));
     $('retry-practice').disabled = practice.report.every(item => item.outcome === 'first');
+    const review = practice.report.filter(item=>item.outcome!=='first').map(({task,answer}) => {
+      const line = node('li','','');
+      line.append(node('strong','',task.prompt||t('Диктант','Diktant')),
+        node('p','meta',t('Твой ответ','Javobing')+' · '+(answer||'—')),
+        node('p','',t('Образец','Namuna')+' · '+task.accepted.join(' · ')));
+      if (task.hint) line.append(node('p','meta',task.hint[language]));
+      return line;
+    });
+    $('practice-review-list').replaceChildren(...review);
+    show('practice-review',Boolean(review.length));
     return;
   }
   const [ru,uz] = task.reverse
@@ -445,6 +490,7 @@ function renderPractice() {
   show('prompt', Boolean(task.prompt));
   show('listen-question', Boolean(task.audio));
   $('answer').lang = task.reverse ? language : 'ko';
+  show('practice-keyboard',!task.reverse);
   text('answer-label', task.instruction?.[language] ?? t(ru,uz));
   $('answer').readOnly = practice.completed;
   const result = practice.result;
@@ -464,7 +510,7 @@ function renderPractice() {
 
 function finishAnswer(outcome) {
   practice.completed = true;
-  practice.report.push({task:currentTask(),outcome});
+  practice.report.push({task:currentTask(),outcome,answer:$('answer').value});
   persistPractice();
   renderPractice();
   $('next-question').focus();
@@ -636,10 +682,18 @@ for (const button of $('practice-directions').querySelectorAll('button')) {
   button.onclick = () => {
     if (button.dataset.direction === practiceDirection) return;
     practiceDirection = button.dataset.direction;
-    restartPractice();
+    loadPracticeSetup();
+    renderPractice();
   };
 }
-for (const id of practiceControls) $(id).onchange = restartPractice;
+for (const id of [...practiceControls,'practice-strict']) $(id).onchange = () => {
+  loadPracticeSetup();
+  renderPractice();
+};
+$('start-practice').onclick = () => {
+  restartPractice();
+  $('answer').focus();
+};
 $('answer-form').onsubmit = event => {
   event.preventDefault();
   checkAnswer();
@@ -656,7 +710,7 @@ $('answer').addEventListener('keydown', event => {
   }
 });
 $('answer').addEventListener('input', () => {
-  if (composing || practice.completed) return;
+  if (composing || !practice || practice.completed) return;
   practice.result = '';
   persistPractice();
   renderPractice();

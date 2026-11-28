@@ -35,8 +35,15 @@ let view = 'topics';
 let deck = restoreDeck();
 let practiceUnit = [...chosen][0] ?? 0;
 let mode = 'grammar';
+let direction = 'to-it';
 let amount = 10;
 let session = restoreSession(saved(keys.session,null));
+if (session) {
+  practiceUnit = IT_UNITS[session.unit] ? session.unit : practiceUnit;
+  mode = session.mode || (session.questions[0].prompt === 'dictation' ? 'dictation' :
+    session.questions[0].wordId ? 'translation' : 'grammar');
+  if (mode === 'translation') direction = session.questions[0].prompt;
+}
 let query = '';
 let dictUnit = 'all';
 let dictHard = false;
@@ -255,8 +262,10 @@ function renderLesson(lesson) {
     '<details class="surface lesson"><summary>' + esc(t(ru,uz)) + '</summary><p>' + esc(t(bodyRu,bodyUz)) +
     '</p><div class="listen-controls">' + phrases.map(phrase => button(phrase,'audio',phrase,'btn','lang="it"')).join('') + '</div></details>').join('');
   const scene = lesson.scene.map(([phrase,ru,uz]) => '<li>' + it(phrase) + ' <p class="meta">' + esc(t(ru,uz)) + '</p>' + player(phrase) + '</li>').join('');
-  return rules + '<details class="surface lesson"><summary>' + t('Диалог и самостоятельная реплика','Dialog va mustaqil javob') +
+  return rules + '<details class="surface lesson"><summary>' + t('Диалог и самопроверка','Dialog va o‘zini tekshirish') +
     '</summary><ol>' + scene + '</ol><h2>' + t('Теперь твоя реплика','Endi sizning navbatingiz') + '</h2><p>' +
+    t('Скажи или напиши свой ответ, затем сравни с образцом.','Javobingizni ayting yoki yozing, keyin namuna bilan solishtiring.') +
+    '</p><p>' +
     esc(t(...lesson.task)) + '</p><details><summary>' + t('Образец','Namuna') + '</summary><p>' +
     it(lesson.model[0]) + '</p><p class="meta">' + esc(t(lesson.model[1],lesson.model[2])) +
     '</p>' + player(lesson.model[0],true) + '</details></details>';
@@ -266,17 +275,20 @@ function renderPractice() {
   if (session) return session.done ? renderResults() : renderQuestion();
   if (!chosen.size) return '<section>' + btn('Выбрать юнит','Bo‘lim tanlash','route','topics') + '</section>';
   selectPracticeUnit();
-  const options = [
-    ['grammar','Грамматика','Grammatika'],['to-it',lang.toUpperCase()+' → IT',lang.toUpperCase()+' → IT'],
-    ['from-it','IT → '+lang.toUpperCase(),'IT → '+lang.toUpperCase()],['dictation','Диктант','Diktant']
-  ];
+  const options = [['grammar','Грамматика','Grammatika'],['translation','Перевод','Tarjima'],['dictation','Диктант','Diktant']];
   const modes = options.map(([id,ru,uz]) => '<option value="' + id + '"' + (mode===id ? ' selected' : '') + '>' + t(ru,uz) + '</option>').join('');
+  const directions = mode === 'translation' ? '<label>' + t('Направление','Yo‘nalish') + '<select id="practice-direction">' +
+    [['to-it',lang.toUpperCase()+' → IT'],['from-it','IT → '+lang.toUpperCase()]]
+      .map(([id,label]) => '<option value="'+id+'"'+(direction===id?' selected':'')+'>'+label+'</option>').join('') + '</select></label>' : '';
+  const count = mode === 'grammar' ? IT_LESSONS[practiceUnit].drills.length :
+    Math.min(amount, mode === 'dictation' ? dictationPool(practiceUnit).length : wordsForPractice(practiceUnit).length);
   return '<section><div class="surface lesson"><div class="bar controls"><label>' + t('Юнит','Bo‘lim') +
     '<select id="practice-unit">' + unitOptions(practiceUnit) + '</select></label><label>' + t('Режим','Rejim') +
-    '<select id="mode">' + modes + '</select></label>' +
-    (mode === 'grammar' ? '' : '<label>' + t('Сколько слов','So‘zlar soni') + '<select id="amount">' +
+    '<select id="mode">' + modes + '</select></label>' + directions +
+    (mode === 'grammar' ? '' : '<label>' + t('Количество заданий','Mashqlar soni') + '<select id="amount">' +
       [6,10,20].map(n => '<option'+(n===amount?' selected':'')+'>'+n+'</option>').join('') + '</select></label>') +
-    '</div>' + btn('Начать','Boshlash','start','','primary') +
+    '</div><p class="meta" role="status">' + t('Заданий: ','Mashqlar: ') + count + '</p>' +
+    btn('Начать','Boshlash','start','','primary',count?'':'disabled') +
     btn('Изменить выбранные юниты','Tanlangan bo‘limlarni o‘zgartirish','route','topics') +
     '</div>' + renderLesson(IT_LESSONS[practiceUnit]) + '</section>';
 }
@@ -287,19 +299,37 @@ function drillQuestions(unit) {
   }));
 }
 
+function wordsForPractice(unit) {
+  return IT_WORDS.filter(word => word.sources.some(source => source.unit === unit));
+}
+
+function dictationPool(unit) {
+  const lesson = IT_LESSONS[unit];
+  const leading = lesson.sounds || lesson.scene.map(([line]) => line);
+  return [...new Set([...leading,...wordsForPractice(unit).map(word=>word.it)])].filter(line=>Object.hasOwn(IT_AUDIO,line));
+}
+
 function wordQuestions(unit, type) {
   const lesson = IT_LESSONS[unit];
-  const pool = IT_WORDS.filter(word => word.sources.some(source => source.unit === unit));
   if (type === 'dictation') {
-    const practiceSounds = lesson.sounds || [];
-    const phrases = [...new Set([...practiceSounds,...shuffled(pool).map(word => word.it)])].slice(0,amount);
-    return phrases.map(text => ({prompt:'dictation',audio:text,sound:true,accepted:[text],language:'it'}));
+    const pool = dictationPool(unit);
+    const focus = new Set(lesson.sounds || lesson.scene.map(([line])=>line));
+    const leading = shuffled(pool.filter(line=>focus.has(line))).slice(0,lesson.sounds ? amount : 2);
+    const rest = shuffled(pool.filter(line=>!leading.includes(line) && !focus.has(line)));
+    return shuffled([...leading,...rest].slice(0,amount)).map(text =>
+      ({prompt:'dictation',audio:text,sound:true,accepted:[text],language:'it'}));
   }
-  return shuffled(pool).slice(0,amount).map(word =>
+  return shuffled(wordsForPractice(unit)).slice(0,amount).map(word =>
     ({prompt:type,wordId:word.id,language:type === 'to-it'?'it':lang,accepted:[word.it]}));
 }
 
 function questionForLocale(question) {
+  if (question.prompts) {
+    const drills = IT_LESSONS[session.unit]?.drills || IT_LESSONS.flatMap(lesson=>lesson.drills);
+    const drill = drills.find(([ru,,frame,answers]) =>
+      ru===question.prompts.ru && frame===question.frame && answers.split('|')[0]===question.accepted[0]);
+    return drill ? {...question,accepted:drill[3].split('|')} : question;
+  }
   const word = wordById.get(question.wordId);
   if (!word) return question;
   if (question.prompt === 'from-it') {
@@ -314,7 +344,7 @@ function questionForLocale(question) {
 
 function start(questions) {
   if (!questions.length) return;
-  session = {index:0,done:false,questions,replies:[]};
+  session = {index:0,done:false,unit:practiceUnit,mode,questions,replies:[]};
   saveSession();
   render();
   $('answer')?.focus();
@@ -354,7 +384,8 @@ function renderQuestion() {
   const word = wordById.get(q.wordId);
   const last = session.index === session.questions.length-1;
   const clue = q.frame ? it(q.frame) : word ? q.prompt === 'from-it' ? it(word.it) : esc(word[lang]) : '';
-  const keys = q.language === 'it' ? '<div class="accents">' + Array.from('àèéìòù’').map(s => button(s,'insert',s)).join('') + '</div>' : '';
+  const locked = a.solved || a.assisted;
+  const keys = q.language === 'it' && !locked ? '<div class="accents">' + Array.from('àèéìòù’').map(s => button(s,'insert',s)).join('') + '</div>' : '';
   const feedback = a.result ? t(...(feedbacks[a.result] || feedbacks.wrong)) : '';
   const tone = a.result === 'correct' ? 'good' : a.result === 'shown' ? 'shown' : 'bad';
   return '<section class="surface practice"><p class="meta">' + (session.index+1) + ' / ' + session.questions.length +
@@ -364,15 +395,15 @@ function renderQuestion() {
     (clue ? '<div class="prompt">' + clue + '</div>' : '') +
     (q.audio ? '<div class="listen-controls">' + player(q.audio,true,true) + '</div>' : '') +
     '<input id="answer" lang="' + q.language + '" type="text" autocomplete="off" autocapitalize="off" spellcheck="false" value="' +
-    esc(a.text) + '">' + keys + '<p id="feedback" role="status" data-tone="' + tone + '">' + esc(feedback) + '</p>' +
+    esc(a.text) + '"' + (locked?' readonly':'') + '>' + keys + '<p id="feedback" role="status" data-tone="' + tone + '">' + esc(feedback) + '</p>' +
     (a.assisted ? '<p>' + q.accepted.map(s=>q.language === 'it' ? it(s) : esc(s)).join(' · ') + '</p>' : '') +
     ((a.solved || a.assisted) && q.language === 'it' && Object.hasOwn(IT_AUDIO,q.accepted[0]) ?
       '<div class="audio-answer">' + player(q.accepted[0],true) + '</div>' : '') +
-    '<div class="actions">' + btn('Проверить','Tekshirish','check','','primary') +
-    btn('Показать образец','Namunani ko‘rsatish','answer') +
+    '<div class="actions">' + (locked ? '' : btn('Проверить','Tekshirish','check','','primary') +
+    btn('Показать образец','Namunani ko‘rsatish','answer')) +
     btn('Назад','Oldingi','question-move','-1','btn',session.index ? '' : 'disabled') +
     button(last ? t('Результат','Natija') : t('Вперёд','Keyingi'),'question-move','1') + '</div>' +
-    btn('Закрыть практику','Mashqni yopish','practice-clear','','quiet') + '</section>';
+    btn('Новая попытка','Yangi urinish','practice-clear','','quiet') + '</section>';
 }
 
 function resultAt(index) {
@@ -409,6 +440,7 @@ function renderResults() {
 
 function verify() {
   const a = reply();
+  if (a.solved || a.assisted) return;
   const q = questionForLocale(session.questions[session.index]);
   const value = $('answer').value;
   const result = checkItalian(value,q);
@@ -512,7 +544,7 @@ document.addEventListener('click',event => {
     else deck.index++;
   }
   if (action === 'start') {
-    start(mode === 'grammar' ? drillQuestions(practiceUnit) : wordQuestions(practiceUnit,mode));
+    start(mode === 'grammar' ? drillQuestions(practiceUnit) : wordQuestions(practiceUnit,mode==='translation'?direction:mode));
     return;
   }
   if (action === 'check') { verify(); return; }
@@ -543,6 +575,8 @@ document.addEventListener('click',event => {
   }
   if (action === 'retry') { start(session.questions.filter((_,i) => resultAt(i)!=='first')); return; }
   if (action === 'practice-clear') {
+    if (!session.done &&
+      !window.confirm(t('Начать заново? Текущая попытка будет сброшена.','Qaytadan boshlaysizmi? Joriy urinish bekor qilinadi.'))) return;
     session = null;
     saveSession();
     stopAudio();
@@ -582,9 +616,14 @@ content.addEventListener('input',event => {
 content.addEventListener('change',event => {
   const {id,value} = event.target;
   if (id === 'dict-unit') { dictUnit = value; dictLimit = 35; updateDictionary(); }
-  if (id === 'practice-unit') { practiceUnit = Number(value); render(); }
-  if (id === 'mode') { mode = value; render(); }
-  if (id === 'amount') amount = Number(value);
+  if (id === 'practice-unit' || id === 'mode' || id === 'amount' || id === 'practice-direction') {
+    if (id === 'practice-unit') practiceUnit = Number(value);
+    if (id === 'mode') mode = value;
+    if (id === 'amount') amount = Number(value);
+    if (id === 'practice-direction') direction = value;
+    render();
+    $(id)?.focus();
+  }
 });
 
 content.addEventListener('keydown',event => {

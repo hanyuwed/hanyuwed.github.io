@@ -1,6 +1,6 @@
 const BASE=new URL(self.registration.scope);
 const CACHE_PREFIX=`hanyuwed:${BASE.pathname}:`;
-const CACHE=CACHE_PREFIX+'v20';
+const CACHE=CACHE_PREFIX+'v21';
 const MEDIA_CACHE='hanyuwed-media:'+BASE.pathname;
 const assetUrl=path=>new URL(path,BASE).href;
 const PAGES=new Map([
@@ -15,11 +15,11 @@ const ASSETS=[
   './','index.html','chinese.html','courses.css','courses.js','course-common.js','ui.css',
   'style.css','data.js','uz-words.js','app.js?v=3','audio-player.js','pinyin-practice.js',
   'manifest.webmanifest','icon.svg','icon-192.png','icon-512.png','apple-touch-icon.png',
-  'fr/','fr/index.html','fr/styles.css','fr/course-data.js','fr/grammar.js','fr/answers.js','fr/app.js?v=2','fr/audio-index.js',
-  'ko/','ko/index.html','ko/styles.css','ko/data.js','ko/answers.js','ko/app.js','ko/audio-index.js',
-  'ar/','ar/index.html','ar/styles.css?v=2','ar/data.js','ar/answers.js','ar/app.js?v=3','ar/speech-data.js',
-  'it/','it/index.html','it/styles.css','it/course-data.js','it/grammar.js','it/answers.js','it/audio-index.js','it/app.js',
-  'es/','es/index.html','es/styles.css','es/course-data.js','es/grammar.js','es/answers.js','es/audio-index.js','es/app.js',
+  'fr/','fr/index.html','fr/styles.css?v=2','fr/course-data.js','fr/grammar.js?v=2','fr/answers.js','fr/app.js?v=3','fr/audio-index.js',
+  'ko/','ko/index.html','ko/styles.css','ko/styles.css?v=2','ko/data.js','ko/answers.js?v=2','ko/app.js?v=2','ko/audio-index.js',
+  'ar/','ar/index.html','ar/styles.css?v=3','ar/data.js','ar/answers.js?v=2','ar/app.js?v=4','ar/speech-data.js',
+  'it/','it/index.html','it/styles.css','it/course-data.js','it/grammar.js?v=2','it/answers.js','it/audio-index.js','it/app.js?v=2',
+  'es/','es/index.html','es/styles.css','es/course-data.js','es/grammar.js?v=2','es/answers.js','es/audio-index.js','es/app.js?v=2',
 ].map(assetUrl);
 self.addEventListener('install',event=>event.waitUntil((async()=>{
   const cache=await caches.open(CACHE);

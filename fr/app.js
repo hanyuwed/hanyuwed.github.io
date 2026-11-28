@@ -33,10 +33,18 @@ const VIEWS = {
   practice:['Практика','Mashqlar'], dictionary:['Словарь','Lug‘at']
 };
 const MODES = {
-  writing:['Написание','Yozish'],
+  writing:['Перевод','Tarjima'],
   present:['Présent','Présent'], past:['Passé composé','Passé composé'],
-  article:['Артикли','Artikllar'], agreement:['Согласование','Moslashuv'], location:['Предлоги','Predloglar'],
+  context:['Грамматика в контексте','Kontekstda grammatika'],
   dictation:['Диктант','Diktant']
+};
+const CONTEXT_MODES = {
+  article:['Артикли','Artikllar'], agreement:['Согласование','Moslashuv'], location:['Предлоги','Predloglar']
+};
+const CONTEXT_HINTS = {
+  article:['Проверь род, число и первую букву существительного.','Otning jinsi, soni va birinchi harfini tekshiring.'],
+  agreement:['Найди слово, от которого зависит форма в пропуске.','Bo‘sh joydagi shakl qaysi so‘zga bog‘liqligini toping.'],
+  location:['Вспомни, как выражают это положение или какой предлог зависит от глагола.','Joylashuv ifodasini yoki fe’lga bog‘liq predlogni eslang.']
 };
 const PREFIX = typeof COURSE_STORAGE_PREFIX === 'string' ? COURSE_STORAGE_PREFIX : 'hanyuwed:fr:';
 const languageKey = PREFIX === 'hanyuwed:fr:' ? HanyuCourse.languageKey : PREFIX + 'language';
@@ -470,7 +478,11 @@ const DICTATION = [
   ['seven','Nous voyageons souvent.','Мы часто путешествуем.','Biz tez-tez sayohat qilamiz.'],
   ['eight','Il a écrit une annonce.','Он написал объявление.','U e’lon yozdi.'],
   ['nine','Elles sont parties hier.','Они уехали вчера (о двух женщинах).','Ular kecha ketishdi (ayollar haqida).'],
-  ['ten','C’est une belle maison.','Это красивый дом.','Bu chiroyli uy.']
+  ['ten','C’est une belle maison.','Это красивый дом.','Bu chiroyli uy.'],
+  ['only-child','Je suis enfant unique.','Я единственный ребёнок в семье.','Men oiladagi yagona farzandman.'],
+  ['family','Ma sœur est étudiante. Nous passons du temps ensemble.','Моя сестра студентка. Мы проводим время вместе.','Singlim talaba. Biz birga vaqt o‘tkazamiz.'],
+  ['apartment','C’est un bel appartement à côté du marché. La cuisine est équipée.','Это красивая квартира рядом с рынком. Кухня оборудована.','Bu bozor yonidagi chiroyli kvartira. Oshxona jihozlangan.'],
+  ['visit','Il est bien situé.','Он удачно расположен.','U qulay joyda joylashgan.']
 ];
 
 function exercisePool() {
@@ -498,7 +510,7 @@ function exercisePool() {
     id:'dictation-'+id,fr:true, clip:fr, title:'', note:'', accepted:[fr],
     label:['Прослушай и запиши предложение.','Gapni tinglab, yozing.'], transcripts:[ru,uz], elision:true
   }));
-  return CONTEXT_EXERCISES.filter(item=>item.group===mode);
+  return mode==='context' ? CONTEXT_EXERCISES : CONTEXT_EXERCISES.filter(item=>item.group===mode);
 }
 
 function itemsFromIds(pool, ids, idFor) {
@@ -531,7 +543,8 @@ function restorePosition(saved, length, fallbackIndex = 0) {
       draft:typeof reply.draft==='string' ? reply.draft : '',
       feedback:Object.hasOwn(MESSAGES,reply.feedback) ? reply.feedback : null,
       attempts:Number.isSafeInteger(reply.attempts) && reply.attempts>0 ? reply.attempts : 0,
-      firstCorrect:reply.firstCorrect===true,correct:reply.correct===true,shown:reply.shown===true
+      firstCorrect:reply.firstCorrect===true,correct:reply.correct===true,shown:reply.shown===true,
+      hintUsed:reply.hintUsed===true
     };
   }) : [];
   return {index,replies};
@@ -564,10 +577,14 @@ function restorePractice() {
   practice = {queue,...current,languageSessions};
 }
 
+function availableExercises() {
+  const pool = exercisePool();
+  return mode==='dictation' && !hasFrenchVoice() ? pool.filter(item => recordingFor(item.clip)) : pool;
+}
+
 function practiceStart(items) {
   updateVoices();
-  let queue = items || shuffle(exercisePool());
-  if (mode==='dictation' && !hasFrenchVoice()) queue = queue.filter(item => recordingFor(item.clip));
+  let queue = items || shuffle(availableExercises());
   if (!items && settings.amount!=='all') queue = queue.slice(0,Number(settings.amount));
   if (!queue.length) {
     if (mode==='dictation') soundStatus = t('Записи для диктанта недоступны. Попробуй письменное упражнение.','Diktant audiolari mavjud emas. Yozma mashqni sinab ko‘r.');
@@ -631,7 +648,7 @@ function practiceOptions() {
       fields.push(selectField('person',t('Лицо','Shaxs'),[['all',all],...PERSONS.map(p=>[p,p])]));
     }
   }
-  fields.push(selectField('amount',t('Заданий','Mashqlar soni'),[['10','10'],['20','20'],['all',t('Весь урок','Butun dars')]]));
+  fields.push(selectField('amount',t('Заданий','Mashqlar soni'),[['10','10'],['20','20'],['all',t('Все доступные','Barcha mavjud')]]));
   const empty = mode==='writing' && !selected.size;
   const inversionJe = mode==='present' && settings.form==='inversion' && settings.person==='je';
   const agreementAvoir = mode==='past' && settings.pastForm==='agreement' && (
@@ -642,22 +659,43 @@ function practiceOptions() {
     t('Для этого упражнения выбери être.','Bu mashqda être ni tanlang.') : missingDictation ?
     t('Записи для диктанта недоступны.','Diktant audiolari mavjud emas.') : '';
   const reference = mode==='present' ? presentReference() : mode==='past' ? pastReference() : '';
-  return '<section class="box stack">' + (mode==='writing'?'<p class="detail">'+esc(selectionSummary())+' · <a href="#topics">'+
+  const available = availableExercises().length;
+  const count = settings.amount==='all' ? available : Math.min(available,Number(settings.amount));
+  const contextFilters = (mode==='context'||Object.hasOwn(CONTEXT_MODES,mode)) ?
+    '<nav class="tabs mode-nav" aria-label="'+t('Тема грамматики','Grammatika mavzusi')+'">'+
+    Object.entries({context:['Все темы','Barcha mavzular'],...CONTEXT_MODES})
+      .map(([id,label])=>anchor('practice/'+id,tr(label),mode===id)).join('')+'</nav>' : '';
+  return '<section class="box stack">' + contextFilters + (mode==='writing'?'<p class="detail">'+esc(selectionSummary())+' · <a href="#topics">'+
     t('Изменить темы','Mavzularni o‘zgartirish')+'</a></p>':'') + '<div class="form-grid">'+fields.join('')+'</div>'+
+    '<p class="detail" role="status">'+t('Заданий: ','Mashqlar: ')+count+' / '+available+'</p>'+
     (notice?'<p class="detail">'+esc(notice)+'</p>':'')+
     (missingDictation?'<a href="#practice">'+t('Открыть письменное упражнение','Yozma mashqni ochish')+'</a>':'')+'<div>'+
-    actionButton(t('Начать','Boshlash'),'start-practice','primary',notice?'disabled':'')+'</div>'+soundRegion()+'</section>'+reference;
+    actionButton(t('Начать','Boshlash'),'start-practice','primary',notice||!count?'disabled':'')+'</div>'+soundRegion()+'</section>'+reference;
 }
 
 function resultPage() {
-  const wrong = practice.queue.filter((_,index)=>!practice.replies[index]?.firstCorrect);
-  const corrected = practice.replies.filter(reply=>reply?.correct&&!reply.firstCorrect).length;
-  const skipped = practice.queue.filter((_,index)=>!practice.replies[index]?.attempts && !practice.replies[index]?.shown).length;
-  return '<section class="box stack"><h2>'+t('Результат','Natija')+'</h2><p>'+
-    t('Верно с первой попытки: ','Birinchi urinishda to‘g‘ri: ')+(practice.queue.length-wrong.length)+' / '+practice.queue.length+
-    ' · '+t('Исправлено: ','Tuzatildi: ')+corrected+' · '+t('Пропущено: ','O‘tkazib yuborildi: ')+skipped+'</p><div class="row">'+
+  const labels = {
+    first:['С первого раза','Birinchi urinishda'], corrected:['После исправления','Tuzatishdan so‘ng'],
+    hint:['С подсказкой','Yordam bilan'], shown:['Ответ раскрыт','Javob ko‘rsatildi'],
+    wrong:['С ошибкой','Xato bilan'], skipped:['Пропущено','O‘tkazib yuborildi']
+  };
+  const rows = practice.queue.map((item,index) => {
+    const reply = practice.replies[index];
+    const state = reply?.shown ? 'shown' : reply?.hintUsed ? 'hint' : reply?.firstCorrect ? 'first' :
+      reply?.correct ? 'corrected' : reply?.attempts ? 'wrong' : 'skipped';
+    return {item,reply,state};
+  });
+  const totals = Object.entries(labels).map(([id,label])=>'<dt>'+tr(label)+'</dt><dd>'+
+    rows.filter(row=>row.state===id).length+'</dd>').join('');
+  const needsReview = rows.filter(row=>row.state!=='first');
+  const review = needsReview.map(({item,reply,state})=>'<li><strong>'+esc(item.title||tr(item.label))+
+    '</strong> · '+tr(labels[state])+'<p>'+t('Твой ответ','Javobingiz')+' · '+esc(reply?.draft||'—')+'</p><p>'+
+    t('Образец','Namuna')+' · '+esc(item.solution||item.accepted[0])+'</p>'+
+    (item.rule?'<p class="detail">'+esc(tr(item.rule))+'</p>':'')+'</li>').join('');
+  return '<section class="box stack"><h2>'+t('Результат','Natija')+'</h2><dl class="summary">'+totals+'</dl>'+
+    (review?'<details><summary>'+t('Разбор заданий','Mashqlar tahlili')+'</summary><ol>'+review+'</ol></details>':'')+'<div class="row">'+
     actionButton(t('Назад','Oldingi'),'previous-question','secondary')+
-    (wrong.length?actionButton(t('Повторить ошибки','Xatolarni takrorlash'),'retry','primary'):'')+
+    (needsReview.length?actionButton(t('Повторить задания','Mashqlarni takrorlash'),'retry','primary'):'')+
     actionButton(t('Настроить практику','Mashqni sozlash'),'practice-settings')+'<a href="#topics">'+t('Выбрать темы','Mavzularni tanlash')+'</a></div></section>';
 }
 
@@ -667,15 +705,16 @@ function questionPage() {
   const last = practice.index === practice.queue.length - 1;
   const accents = item.fr ? '<div class="accent-bar" aria-label="'+t('Французские знаки','Fransuzcha belgilar')+'">'+
     [...'éèêëàâîïôùûüçœ’'].map(letter=>actionButton(letter,'accent','accent-key','data-letter="'+letter+'"')).join('')+'</div>' : '';
-  const detail = item.transcripts ? '<details><summary>'+t('Контекст по смыслу','Ma’no bo‘yicha yordam')+'</summary><p>'+
-    esc(tr(item.transcripts))+'</p></details>' : '';
+  const hint = item.transcripts || CONTEXT_HINTS[item.group];
+  const detail = hint ? (reply?.hintUsed ? '<p class="detail">'+esc(tr(hint))+'</p>' :
+    !reply?.correct && !reply?.shown ? actionButton(t('Подсказка','Yordam'),'practice-hint','text-button') : '') : '';
   return '<section class="box stack"><div class="row"><p class="detail">'+(practice.index+1)+' / '+practice.queue.length+
-    (item.note?' · '+esc(item.note):'')+'</p>'+actionButton(t('Настройки','Sozlamalar'),'practice-settings','text-button')+'</div>'+
+    (item.note?' · '+esc(item.note):'')+'</p>'+actionButton(t('Новая попытка','Yangi urinish'),'practice-settings','text-button')+'</div>'+
     '<progress class="progress" max="'+practice.queue.length+'" value="'+practice.index+'" aria-label="'+t('Ход практики','Mashq jarayoni')+'"></progress>'+
     '<p id="instruction">'+esc(tr(item.label))+'</p>'+(item.title?'<p class="prompt"'+(item.promptFr||!item.entry?' lang="fr"':'')+'>'+
       esc(item.title)+'</p>':'')+
     (item.hint?'<p class="detail" id="question-context">'+esc(tr(item.hint))+'</p>':'')+
-    (item.clip?'<div>'+sound(item.clip)+'</div>'+detail:'')+
+    (item.clip?'<div>'+sound(item.clip)+'</div>':'')+detail+
     '<form id="answer-form" class="answer-form" novalidate><label class="field"><span>'+t('Твой ответ','Javobingiz')+
     '</span><input id="answer" type="text" lang="'+(item.fr?'fr':lang)+'" value="'+esc(reply?.draft || '')+
     '" aria-describedby="instruction '+(item.hint?'question-context ':'')+'feedback" autocapitalize="off" autocorrect="off" spellcheck="false" autocomplete="off"></label>'+accents+
@@ -688,7 +727,8 @@ function questionPage() {
 }
 
 function practicePage() {
-  const tabs = Object.entries(MODES).map(([id,label])=>anchor(id==='writing'?'practice':'practice/'+id,tr(label),mode===id)).join('');
+  const activeMode = Object.hasOwn(CONTEXT_MODES,mode) ? 'context' : mode;
+  const tabs = Object.entries(MODES).map(([id,label])=>anchor(id==='writing'?'practice':'practice/'+id,tr(label),activeMode===id)).join('');
   const body = practice ? (practice.index===practice.queue.length ? resultPage() : questionPage()) : practiceOptions();
   return '<section class="practice stack"><nav class="tabs mode-nav" aria-label="'+
     t('Тип практики','Mashq turi')+'">'+tabs+'</nav>'+body+'</section>';
@@ -803,12 +843,7 @@ function updateFeedback() {
   delete box.dataset.state;
   if (!status) return;
   box.dataset.state = ({correct:'ok',shown:'ok',accent:'near',empty:'near'})[status] || 'error';
-  const explain = !['correct','shown','empty','negation','question-mark','accent','article','elision'].includes(status) && item.rule;
-  box.textContent = tr(MESSAGES[status]) + (explain ? ' ' + tr(item.rule) : '');
-  if (status==='accent') {
-    const match = item.accepted.find(variant=>searchSpelling(answerSpelling(variant,item))===searchSpelling(answerSpelling(reply.draft,item)));
-    box.append(' '+ (match || item.accepted[0]));
-  }
+  box.textContent = tr(MESSAGES[status]);
   if (locked) {
     const example = document.createElement('strong');
     example.lang = item.fr?'fr':lang;
@@ -843,7 +878,7 @@ function check() {
     const prior = reply.attempts;
     reply.attempts += 1;
     if (result==='correct') {
-      reply.firstCorrect = prior===0;
+      reply.firstCorrect = prior===0 && !reply.hintUsed;
       reply.correct = true;
       saveReply(current,reply);
     }
@@ -884,7 +919,7 @@ function clearSound() {
 function updateRoute() {
   const [target,targetMode,rawVerb] = location.hash.slice(1).split('/');
   const requested = Object.hasOwn(VIEWS,target) ? target : 'topics';
-  const requestedMode = Object.hasOwn(MODES,targetMode) ? targetMode : 'writing';
+  const requestedMode = Object.hasOwn(MODES,targetMode)||Object.hasOwn(CONTEXT_MODES,targetMode) ? targetMode : 'writing';
   if (requested==='practice' && requestedMode!==mode) {
     mode = requestedMode;
     restorePractice();
@@ -893,10 +928,9 @@ function updateRoute() {
     try {
       const verb = decodeURIComponent(rawVerb);
       const list = mode==='present'?COURSE.present:mode==='past'?COURSE.past:[];
-      if (list.some(e => e.verb===verb) && settings.verb!==verb) {
+      if (!practice && list.some(e => e.verb===verb) && settings.verb!==verb) {
         settings.verb = verb;
         settings.pastAux = 'all';
-        practice = null;
         savePractice();
       }
     } catch { /* Malformed hash: keep the current selection. */ }
@@ -1000,8 +1034,17 @@ document.addEventListener('click',event=>{
     cardState.back = false;
   }
   if (action==='practice-settings') {
+    if (practice.index < practice.queue.length &&
+      !window.confirm(t('Начать заново? Текущая попытка будет сброшена.','Qaytadan boshlaysizmi? Joriy urinish bekor qilinadi.'))) return;
     practice = null;
     savePractice();
+  }
+  if (action==='practice-hint') {
+    replyRecord().hintUsed = true;
+    savePractice();
+    render();
+    $('answer')?.focus();
+    return;
   }
   if (action==='start-practice') {
     if (!practiceStart()) {

@@ -11,7 +11,7 @@
 <meta name="description" content="Тренажёр слов SNU Korean 1A с карточками, словарём и проверкой ответов на русском и узбекском.">
 <link rel="canonical" href="https://hanyuwed.github.io/ko/">
 <title>HanyuWed · Корейский</title>
-<link rel="stylesheet" href="./styles.css">
+<link rel="stylesheet" href="./styles.css?v=2">
 <link rel="stylesheet" href="../ui.css">
 
   <meta property="og:type" content="website">
@@ -122,7 +122,6 @@
         <label for="practice-mode"><span data-uz="Mashq turi">Тип задания</span>
           <select class="btn" id="practice-mode">
             <option value="meaning" data-uz="So‘z va tarjima">Слова и перевод</option>
-            <option value="spelling" data-uz="Aniq yozish">Точное написание</option>
             <option value="numbers" data-uz="Sonlar va sanalar">Числа и даты</option>
             <option value="context" data-uz="Ibora va qo‘shimchalar">Фразы и частицы</option>
             <option value="dictation" data-uz="Diktant">Диктант</option>
@@ -131,7 +130,8 @@
         <label for="practice-limit"><span data-uz="Savollar soni">Объём</span>
           <select class="btn" id="practice-limit">
             <option value="10" data-uz="10 tagacha">До 10 заданий</option>
-            <option value="all" data-uz="Butun bo‘lim">Весь раздел</option>
+            <option value="20" data-uz="20 tagacha">До 20 заданий</option>
+            <option value="all" data-uz="Barcha mavjud">Все доступные</option>
           </select>
         </label>
         <label id="number-options" for="number-kind" hidden><span data-uz="Son yoki sana turi">Система или формат</span>
@@ -148,7 +148,13 @@
           <button type="button" data-direction="hangul" id="to-hangul">RU → 한글</button>
           <button type="button" data-direction="translation" id="to-translation">한글 → RU</button>
         </div>
+        <label id="practice-strict-option" hidden><input type="checkbox" id="practice-strict">
+          <span data-uz="Bo‘sh joylarni qat’iy tekshirish">Строго проверять пробелы</span>
+        </label>
       </div>
+      <p class="meta"><span id="practice-scope"></span> · <a href="#units" data-uz="Darslarni tanlash">Выбрать уроки</a></p>
+      <p id="practice-count" class="meta" role="status"></p>
+      <button type="button" id="start-practice" class="primary" data-uz="Boshlash">Начать</button>
       <p id="practice-notice" class="meta" role="status" hidden></p>
       <div id="question">
         <div class="row meta"><span id="question-unit"></span><span id="question-count"></span></div>
@@ -157,6 +163,7 @@
           <div class="prompt" id="prompt"></div>
           <button type="button" id="listen-question" class="btn" data-uz="Tinglash" hidden>Прослушать</button>
           <label id="answer-label" for="answer"></label>
+          <p id="practice-keyboard" class="meta" data-uz="Javob uchun koreys klaviaturasini yoqing.">Для ответа включи корейскую раскладку.</p>
           <input id="answer" type="text" autocomplete="off" autocapitalize="none" spellcheck="false" enterkeyhint="go" aria-describedby="feedback">
           <div role="status"><p id="feedback"></p><p id="solution" class="reading" hidden></p></div>
           <div class="actions">
@@ -169,6 +176,7 @@
       <div id="practice-end" class="surface empty" hidden>
         <h2 data-uz="Mashq tugadi">Проверка завершена</h2>
         <p id="practice-score"></p>
+        <details id="practice-review"><summary data-uz="Xatolar tahlili">Разбор заданий</summary><ol id="practice-review-list"></ol></details>
         <div class="actions">
           <button type="button" id="restart-practice" class="primary" data-uz="Qaytadan boshlash">Начать заново</button>
           <button type="button" id="retry-practice" class="btn" data-uz="Xatolarni takrorlash">Повторить ошибки</button>
@@ -186,6 +194,6 @@
   </main>
 </div>
 <script defer src="../course-common.js"></script>
-<script type="module" src="./app.js"></script>
+<script type="module" src="./app.js?v=2"></script>
 </body>
 </html>

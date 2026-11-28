@@ -127,6 +127,8 @@ input[type=search], input[type=text], select { display: block; width: 100%; min-
 .feedback[data-state] { padding: 9px 11px; background: var(--soft); border-radius: 9px; }
 .feedback[data-state=error], .feedback[data-state=near] { background: #f4e8e1; color: #7b342e; }
 .feedback strong { display: block; margin-top: 4px; }
+.summary { display:grid; grid-template-columns:minmax(0,1fr) auto; gap:6px 20px; }
+.summary dd { margin:0; font-weight:700; }
 .answer-actions { justify-content: flex-start; }
 .answer-actions #next { margin-left: auto; }
 

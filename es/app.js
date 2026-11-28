@@ -33,9 +33,25 @@ const chosen = new Set(Array.isArray(units) ? units.filter(n => Number.isInteger
 const views = {
   topics: HanyuCourse.labels.units,
   cards: ['Карточки','Kartochkalar'],
-  practice: ['Тест по юниту','Dars bo‘yicha test'],
+  practice: HanyuCourse.labels.practice,
   materials: ['Материалы и аудио','Materiallar va audio'],
   dictionary: ['Словарь','Lug‘at']
+};
+const practiceModes = {
+  translation:[['from-es','С испанского','Ispanchadan'],['to-es','На испанский','Ispanchaga']],
+  listening:[['listen','Слушай и выбери','Tinglang va tanlang'],['dictation','Диктант','Diktant']],
+  grammar:[['grammar','Грамматика','Grammatika']]
+};
+const wordContexts = {
+  'es-el-cafe':'Por la mañana tomo el café sin azúcar.',
+  'es-el-cafe-2':'Nos vemos en el café de la esquina.',
+  'es-la-mujer':'La mujer espera el autobús.',
+  'es-la-mujer-2':'Esta es mi mujer.'
+};
+const imperativeTranslations = {
+  abre:{ru:['открой'],uz:['och']}, bebe:{ru:['пей'],uz:['ich']},
+  come:{ru:['ешь','кушай'],uz:['ye']}, escribe:{ru:['напиши','пиши'],uz:['yoz']},
+  habla:{ru:['говори'],uz:['gapir']}, lee:{ru:['читай','прочитай'],uz:['o‘qi']}
 };
 let view = 'topics';
 let deck = restoreDeck();
@@ -132,7 +148,7 @@ function audioUrl(text) {
   return new URL('audio/' + ES_AUDIO[text] + '.mp3', courseBase).href;
 }
 
-function speak(text, slow) {
+function speak(text, slow, onStart) {
   stopAudio();
   const request = audioRequest;
   const status = $('audio-status');
@@ -149,7 +165,9 @@ function speak(text, slow) {
   audio.currentTime = 0;
   audio.preservesPitch = true;
   audio.playbackRate = slow ? 0.8 : 1;
-  audio.play().catch(error => {
+  audio.play().then(() => {
+    if (request === audioRequest) onStart?.();
+  }).catch(error => {
     if (request !== audioRequest || error.name === 'AbortError') return;
     status.textContent = t('Запись не загрузилась. Нажми «Слушать» ещё раз или перейди дальше.',
       'Audio yuklanmadi. «Tinglash»ni qayta bosing yoki keyingi savolga o‘ting.');
@@ -377,21 +395,23 @@ function renderLesson(lesson) {
 
 function renderPractice() {
   if (session) return session.done ? renderResults() : renderQuestion();
-  const options = [
-    ['from-es','Перевод с испанского','Ispanchadan tarjima'],
-    ['to-es','Перевод на испанский','Ispanchaga tarjima'],
-    ['dictation','Диктант','Diktant'],['listen','Слушай и выбери','Tinglang va tanlang'],
-    ['grammar','Грамматика','Grammatika']
-  ];
-  const modes = options.map(([id,ru,uz]) => '<option value="' + id + '"' + (mode===id ? ' selected' : '') + '>' + t(ru,uz) + '</option>').join('');
+  const group = Object.keys(practiceModes).find(id=>practiceModes[id].some(([value])=>value===mode)) || 'translation';
+  const selectOptions = (options,selected) => options.map(([id,ru,uz])=>'<option value="'+id+'"'+
+    (selected===id ? ' selected' : '')+'>'+t(ru,uz)+'</option>').join('');
+  const groups = selectOptions([
+    ['translation','Перевод','Tarjima'],['listening','Аудирование','Tinglab tushunish'],['grammar','Грамматика','Grammatika']
+  ],group);
+  const modes = group === 'grammar' ? '' : '<label>' + t(...(group==='translation' ?
+    ['Направление','Yo‘nalish'] : ['Упражнение','Mashq'])) + '<select id="mode">' +
+    selectOptions(practiceModes[group],mode)+'</select></label>';
   const lesson = ES_LESSONS[practiceUnit];
-  const count = mode === 'grammar' ? lesson.drills.length : testWords(practiceUnit).length;
+  const count = mode === 'grammar' ? lesson.drills.length : testWords(practiceUnit,mode).length;
   const shownCount = practiceLimit === 0 ? count : Math.min(count, practiceLimit);
   const limits = [[10,'10','10'],[20,'20','20'],[0,'Все','Barchasi']].map(([value,ru,uz]) =>
     '<option value="' + value + '"' + (practiceLimit === value ? ' selected' : '') + '>' + t(ru,uz) + '</option>').join('');
   return '<section><div class="surface lesson"><div class="bar controls"><label>' + t('Юнит','Dars') +
     '<select id="practice-unit">' + unitOptions(practiceUnit) + '</select></label><label>' + t('Режим','Rejim') +
-    '<select id="mode">' + modes + '</select></label><label>' + t('Количество вопросов','Savollar soni') +
+    '<select id="practice-group">' + groups + '</select></label>'+modes+'<label>' + t('Количество вопросов','Savollar soni') +
     '<select id="practice-limit">' + limits + '</select></label>' +
     '</div><p class="meta" role="status">' + t(`Вопросов в тесте: ${shownCount} из ${count}`, `Savollar soni: ${shownCount} / ${count}`) + '</p>' +
     btn('Начать тест','Testni boshlash','start','','primary') + '</div><details class="surface lesson"><summary>' +
@@ -415,12 +435,13 @@ function drillQuestions(unit) {
   }));
 }
 
-function testWords(unit) {
-  return [...new Map(wordsForUnit(unit).map(word => [word.es,word])).values()];
+function testWords(unit, type) {
+  const translation = type === 'from-es' || type === 'to-es';
+  return [...new Map(wordsForUnit(unit).map(word => [translation && wordContexts[word.id] ? word.id : word.es,word])).values()];
 }
 
 function wordQuestions(unit, type) {
-  const pool = testWords(unit);
+  const pool = testWords(unit,type);
   const questions = shuffled(pool);
   if (type === 'dictation') {
     return questions.map(word => ({prompt:'dictation',audio:word.es,model:word.es,accepted:[word.es],language:'es'}));
@@ -434,7 +455,7 @@ function wordQuestions(unit, type) {
     });
   }
   return questions.map(word =>
-    ({prompt:type,wordId:word.id,language:type === 'to-es'?'es':lang,accepted:[word.es]}));
+    ({prompt:type,wordId:word.id,contextual:Boolean(wordContexts[word.id]),language:type === 'to-es'?'es':lang,accepted:[word.es]}));
 }
 
 function questionForLocale(question) {
@@ -442,8 +463,11 @@ function questionForLocale(question) {
   if (!word) return question;
   const pool = ES_UNITS[session?.unit] ? wordsForUnit(session.unit) : vocabulary;
   if (question.prompt === 'from-es') {
-    const translations = pool.filter(other => other.es === word.es).map(other => other[lang]);
-    return {...question,language:lang,accepted:[...new Set(translations.flatMap(text => text.split(' / ')))],model:word.es};
+    const context = wordContexts[word.id];
+    const translations = context && question.contextual ? [word[lang]] :
+      pool.filter(other => other.es === word.es).map(other => other[lang]);
+    const alternatives = imperativeTranslations[word.es]?.[lang] || [];
+    return {...question,language:lang,accepted:[...new Set([...translations.flatMap(text=>text.split(' / ')),...alternatives])],model:word.es};
   }
   const firstMeaning = word[lang].split(' / ')[0];
   const equivalent = pool.filter(other => other[lang].split(' / ').includes(firstMeaning) &&
@@ -508,10 +532,14 @@ function renderQuestion() {
   const word = wordById.get(q.wordId);
   const last = session.index === session.questions.length-1;
   const clue = q.frame ? es(q.frame) : word ? q.prompt === 'from-es' ? es(word.es) : esc(word[lang].split(' / ')[0]) : '';
-  const keys = q.language === 'es' && !q.choices ? '<div class="accents">' + Array.from('áéíóúüñ¿¡').map(s => button(s,'insert',s)).join('') + '</div>' : '';
+  const locked = a.solved || a.assisted;
+  const needsAudio = Boolean(q.audio && !a.heard);
+  const keys = q.language === 'es' && !q.choices && !locked ? '<div class="accents">' + Array.from('áéíóúüñ¿¡').map(s => button(s,'insert',s)).join('') + '</div>' : '';
   const feedback = feedbackText(q,a);
-  const choices = q.choices?.map(choice => button(choice,'choose',choice,'btn','lang="es" aria-pressed="' + (choice === a.text) + '"')).join('') || '';
-  const tokens = q.tokens?.map((token,index) => button(token,'token',index,'btn','lang="es" ' + ((a.tokens || []).includes(index) ? 'disabled' : ''))).join('') || '';
+  const choices = q.choices?.map(choice => button(choice,'choose',choice,'btn','lang="es" aria-pressed="' +
+    (choice === a.text) + '"' + (needsAudio||locked?' disabled':''))).join('') || '';
+  const tokens = !locked && q.tokens?.map((token,index) => button(token,'token',index,'btn','lang="es" ' +
+    ((a.tokens || []).includes(index) ? 'disabled' : ''))).join('');
   const tone = a.result === 'correct' ? 'good' : a.result === 'shown' ? 'shown' : 'bad';
   const unit = ES_UNITS[session.unit];
   return '<section class="surface practice"><p class="meta">' + (unit ? esc(unit[lang]) + ' · ' : '') +
@@ -519,19 +547,21 @@ function renderQuestion() {
     '</p><progress class="progress" aria-label="' + t('Ход теста','Test jarayoni') + '" value="' +(session.index+1)+ '" max="' + session.questions.length+'"></progress>' +
     (choices ? '<p>' + esc(questionLabel(q)) + '</p>' : '<label for="answer">' + esc(questionLabel(q)) + '</label>') +
     (clue ? '<div class="prompt">' + clue + '</div>' : '') +
+    (word && q.prompt==='from-es' && q.contextual ?
+      '<p class="meta" lang="es">'+esc(wordContexts[word.id])+'</p>' : '')+
     (q.audio ? '<div class="listen-controls">' + player(q.audio,true,true) + '</div>' : '') +
     (choices ? '<div class="listen-controls">' + choices + '</div>' : '') +
     (tokens ? '<div class="listen-controls">' + tokens + btn('Очистить','Tozalash','clear-tokens') + '</div>' : '') +
     '<input id="answer" lang="' + q.language + '" type="' + (choices ? 'hidden' : 'text') + '" autocomplete="off" autocapitalize="off" spellcheck="false" value="' +
-    esc(a.text) + '">' + keys + '<p id="feedback" role="status" data-tone="' + tone + '">' + esc(feedback) + '</p>' +
+    esc(a.text) + '"' + (locked?' readonly':'') + '>' + keys + '<p id="feedback" role="status" data-tone="' + tone + '">' + esc(feedback) + '</p>' +
     (a.assisted ? '<p>' + q.accepted.map(s=>q.language === 'es' ? es(s) : esc(s)).join(' · ') + '</p>' : '') +
     ((a.solved || a.assisted) && q.model && Object.hasOwn(ES_AUDIO,q.model) ?
       '<div class="audio-answer">' + es(q.model) + ' ' + player(q.model,true) + '</div>' : '') +
-    '<div class="actions">' + btn('Проверить','Tekshirish','check','','primary') +
-    btn('Показать образец','Namunani ko‘rsatish','answer') +
+    '<div class="actions">' + (locked ? '' : btn('Проверить','Tekshirish','check','','primary',needsAudio?'disabled':'') +
+    btn('Показать образец','Namunani ko‘rsatish','answer')) +
     btn('Назад','Oldingi','question-move','-1','btn',session.index ? '' : 'disabled') +
     button(last ? t('Результат','Natija') : t('Вперёд','Keyingi'),'question-move','1') + '</div>' +
-    btn('Выбрать юнит','Darsni tanlash','practice-clear','','quiet') + '</section>';
+    btn('Новая попытка','Yangi urinish','practice-clear','','quiet') + '</section>';
 }
 
 function resultAt(index) {
@@ -551,7 +581,8 @@ function renderResults() {
     const q = questionForLocale(entry);
     const response = session.replies[index]?.[entry.prompt === 'from-es' ? lang : 'es'];
     const word = wordById.get(entry.wordId);
-    const prompt = word ? (entry.prompt === 'from-es' ? word.es : word[lang].split(' / ')[0]) : q.frame || questionLabel(q);
+    const prompt = word ? (entry.prompt === 'from-es' ? (entry.contextual ? wordContexts[word.id] : word.es) :
+      word[lang].split(' / ')[0]) : q.frame || questionLabel(q);
     return '<li><p>' + esc(prompt) + '</p><p class="meta">' + esc(response?.text || t('Пропущено','O‘tkazildi')) +
       '</p><p>' + esc(q.accepted[0]) + '</p>' + (q.hint?.[lang] ? '<p>' + esc(q.hint[lang]) + '</p>' : '') + '</li>';
   }).join('');
@@ -568,6 +599,7 @@ function renderResults() {
 function verify() {
   const a = reply();
   const q = questionForLocale(session.questions[session.index]);
+  if (a.solved || a.assisted || (q.audio && !a.heard)) return;
   const value = $('answer').value;
   const result = checkSpanish(value,q);
   if (result !== 'empty' && a.last !== spanishSpelling(value,q.language,q.punctuation)) {
@@ -635,11 +667,22 @@ document.addEventListener('click',event => {
   const target = event.target.closest('button[data-action]');
   if (!target) return;
   const {action,value} = target.dataset;
-  if (action === 'audio' || action === 'audio-slow') { speak(value,action === 'audio-slow'); return; }
+  if (action === 'audio' || action === 'audio-slow') {
+    const question = view==='practice' && session && !session.done ? session.questions[session.index] : null;
+    const answer = question?.audio === value ? reply() : null;
+    speak(value,action === 'audio-slow',() => {
+      if (!answer || answer.heard || answer.solved || answer.assisted) return;
+      answer.heard = true;
+      saveSession();
+      for (const control of content.querySelectorAll('[data-action=choose], [data-action=check]')) control.disabled = false;
+    });
+    return;
+  }
   if (action === 'download') { void downloadAudio(Number(value)); return; }
   if (action === 'dict-reset') { query = ''; dictUnit = 'all'; dictHard = false; dictLimit = 35; }
   if (action === 'choose' || action === 'token' || action === 'clear-tokens') {
     const a = reply();
+    if (a.solved || a.assisted) return;
     if (action === 'choose') {
       a.text = value;
     } else {
@@ -730,6 +773,8 @@ document.addEventListener('click',event => {
     return;
   }
   if (action === 'practice-clear') {
+    if (!session.done &&
+      !window.confirm(t('Начать заново? Текущая попытка будет сброшена.','Qaytadan boshlaysizmi? Joriy urinish bekor qilinadi.'))) return;
     session = null;
     saveSession();
     stopAudio();
@@ -770,8 +815,9 @@ content.addEventListener('input',event => {
 content.addEventListener('change',event => {
   const {id,value} = event.target;
   if (id === 'dict-unit') { dictUnit = value; dictLimit = 35; updateDictionary(); }
-  if (id === 'practice-unit' || id === 'materials-unit' || id === 'mode' || id === 'practice-limit') {
+  if (['practice-unit','materials-unit','practice-group','mode','practice-limit'].includes(id)) {
     if (id === 'practice-unit' || id === 'materials-unit') practiceUnit = Number(value);
+    else if (id === 'practice-group') mode = practiceModes[value][0][0];
     else if (id === 'mode') mode = value;
     else {
       practiceLimit = Number(value);

@@ -33,7 +33,7 @@ const IT_LESSONS = [
       ['Напиши «друг» с неопределённым артиклем.','«Erkak do‘st»ni noaniq artikl bilan yozing.','','un amico'],
       ['Впиши неопределённый артикль.','Noaniq artiklni yozing.','___ studente','uno'],
       ['Впиши правильную форму gentile.','Gentile ning to‘g‘ri shaklini yozing.','due studentesse ___','gentili'],
-      ['Вежливо спроси, как зовут собеседника.','Suhbatdoshning ismini hurmat bilan so‘rang.','','Come si chiama?|Come si chiama Lei?']
+      ['Вежливо спроси, как зовут собеседника.','Suhbatdoshning ismini hurmat bilan so‘rang.','','Come si chiama?|Come si chiama Lei?|Lei come si chiama?|Mi può dire come si chiama?']
     ],
     scene:[['Buongiorno, come si chiama?','Добрый день, как Вас зовут?','Xayrli kun, ismingiz nima?'],['Mi chiamo Marta. Lavoro qui vicino.','Меня зовут Марта. Я работаю неподалёку.','Ismim Marta. Shu yaqin atrofda ishlayman.'],['Piacere, sono Luca.','Приятно познакомиться, я Лука.','Tanishganimdan xursandman, men Lukaman.']],
     task:['Представь коллегу и опиши его характер.','Hamkasbingizni tanishtiring va xarakterini ayting.'],
@@ -194,7 +194,7 @@ const IT_LESSONS = [
     drills:[
       ['Замени Anna прямым местоимением.','Anna ni vositasiz olmosh bilan almashtiring.','Chiamo Anna. ___ chiamo.','la'],
       ['Замени ad Anna косвенным местоимением.','Ad Anna ni vositali olmosh bilan almashtiring.','Telefono ad Anna. ___ telefono.','le'],
-      ['Попроси знакомого повернуть направо.','Tanishingizdan o‘ngga burilishini so‘rang.','','gira a destra'],
+      ['Попроси знакомого повернуть направо.','Tanishingizdan o‘ngga burilishini so‘rang.','','gira a destra|gira a destra, per favore|per favore, gira a destra|puoi girare a destra?|puoi girare a destra, per favore?|potresti girare a destra?'],
       ['Замени il libro местоимением в команде для tu.','Tu buyrug‘ida il libro ni olmosh bilan almashtiring.','Prendi il libro!','prendilo'],
       ['Сделай Prendilo отрицательной командой.','Prendilo ni inkor buyruqqa aylantiring.','','non lo prendere|non prenderlo'],
       ['Переведи «я могу ей позвонить».','«Men unga qo‘ng‘iroq qila olaman»ni tarjima qiling.','','le posso telefonare|posso telefonarle|io le posso telefonare|io posso telefonarle']

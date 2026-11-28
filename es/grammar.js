@@ -18,7 +18,9 @@ const ES_LESSONS = [
       ['Какой артикль у libro?', 'Libro so‘zining artikli qaysi?', '___ libro', 'el', 'El libro.', 'У libro мужской род.', 'Libro — muzakkar jinsda.', 'article', 'el|la|las'],
       ['Вставь «пишет».','“Yozayapti” shaklini yozing.','Ella ___ una carta.','escribe','Ella escribe una carta.','Escribir → escribe для ella.','Ella uchun escribir → escribe.'],
       ['Вставь «читает».','“O‘qiyapti” shaklini yozing.','Él ___ un libro.','lee','Él lee un libro.','Leer → lee для él.','Él uchun leer → lee.'],
-      ['Собери «Он не пьёт кофе».','“U qahva ichmaydi” gapini tuzing.','','No bebe café.','No bebe café.','','','','','café|No|bebe']
+      ['Собери «Он не пьёт кофе».','“U qahva ichmaydi” gapini tuzing.','','No bebe café.','No bebe café.','','','','','café|No|bebe'],
+      ['«Открой окно, пожалуйста». Впиши глагол.','“Iltimos, derazani och.” Fe’lni yozing.','___ la ventana, por favor.','abre','Abre la ventana, por favor.','Обращение на tú. В этой просьбе нужна утвердительная форма повелительного наклонения.','Bu tú shaklidagi iltimos. Buyruq maylining tasdiq shaklini yozing.'],
+      ['«Она открывает окно каждое утро». Впиши глагол.','“U har kuni ertalab derazani ochadi.” Fe’lni yozing.','Ella ___ la ventana cada mañana.','abre','Ella abre la ventana cada mañana.','Подлежащее ella, действие происходит регулярно.','Ega ella, harakat muntazam takrorlanadi.']
     ]
   },
   {
@@ -37,7 +39,8 @@ const ES_LESSONS = [
       ['«Он выходит из дома».','“U uydan chiqadi.”','Sale ___ casa.','de','Sale de casa.','После salir укажи исходную точку через de.','Chiqish joyi uchun salir de ishlatiladi.','','a|de|por'],
       ['«Он идёт на почту».','“U pochtaga boradi.”','Va ___ correos.','a','Va a correos.','A указывает направление.','A yo‘nalishni bildiradi.'],
       ['Сообщи, что на столе есть книга.','Stol ustida kitob borligini ayting.','___ un libro en la mesa.','hay','Hay un libro en la mesa.','Hay вводит новый предмет.','Hay narsaning borligini bildiradi.','','hay|está|tiene'],
-      ['Укажи, где лежит эта книга.','Ma’lum kitob qayerdaligini ayting.','El libro ___ en la mesa.','está','El libro está en la mesa.','Estar указывает местонахождение.','Estar joylashuvni bildiradi.']
+      ['Укажи, где лежит эта книга.','Ma’lum kitob qayerdaligini ayting.','El libro ___ en la mesa.','está','El libro está en la mesa.','Estar указывает местонахождение.','Estar joylashuvni bildiradi.'],
+      ['Направь друга на почту: «Почта рядом с банком». Впиши предлог после al lado.','Do‘stingizga yo‘l ko‘rsating: “Pochta bank yonida.” Al lado dan keyin predlogni yozing.','Correos está al lado ___ banco.','del','Correos está al lado del banco.','Al lado de обозначает соседство. Перед el форму de сокращаем до del.','Al lado de yaqin joylashuvni bildiradi. De + el qisqarib del bo‘ladi.']
     ]
   },
   {
@@ -149,7 +152,10 @@ const ES_LESSONS = [
     task: ['Скажи, что он обычно путешествует.', 'U odatda sayohat qilishini ayting.'],
     model: ['Suele viajar.','Он обычно путешествует.','U odatda sayohat qiladi.'],
     drills: [
-      ['«Он обычно путешествует».','“U odatda sayohat qiladi.”','Suele ___.','viajar','Suele viajar.','После suele поставь инфинитив.','Suele dan keyin fe’lning noaniq shaklini qo‘ying.','','viajar|viaja']
+      ['«Он обычно путешествует».','“U odatda sayohat qiladi.”','Suele ___.','viajar','Suele viajar.','После suele поставь инфинитив.','Suele dan keyin fe’lning noaniq shaklini qo‘ying.','','viajar|viaja'],
+      ['Скажи, что твои друзья обычно путешествуют вместе. Впиши форму soler.','Do‘stlaringiz odatda birga sayohat qilishini ayting. Soler shaklini yozing.','Mis amigos ___ viajar juntos.','suelen','Mis amigos suelen viajar juntos.','С mis amigos нужна форма третьего лица множественного числа.','Mis amigos bilan uchinchi shaxs ko‘plik shakli kerak.'],
+      ['Опиши свою привычку: «Я обычно путешествую летом». Впиши форму soler.','Odatingizni ayting: “Men odatda yozda sayohat qilaman.” Soler shaklini yozing.','Yo ___ viajar en verano.','suelo','Yo suelo viajar en verano.','Yo требует формы первого лица единственного числа.','Yo bilan birinchi shaxs birlik shakli kerak.'],
+      ['Собери ответ «Мы обычно путешествуем вместе».','“Biz odatda birga sayohat qilamiz” javobini tuzing.','','Solemos viajar juntos.','Solemos viajar juntos.','Используй soler для привычки и viajar для действия.','Odat uchun soler, harakat uchun viajar ni qo‘llang.','','','viajar|juntos|Solemos']
     ]
   }
 ];
