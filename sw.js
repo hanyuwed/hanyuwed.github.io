@@ -1,6 +1,6 @@
 const BASE=new URL(self.registration.scope);
 const CACHE_PREFIX=`hanyuwed:${BASE.pathname}:`;
-const CACHE=CACHE_PREFIX+'v18';
+const CACHE=CACHE_PREFIX+'v19';
 const MEDIA_CACHE='hanyuwed-media:'+BASE.pathname;
 const assetUrl=path=>new URL(path,BASE).href;
 const PAGES=new Map([

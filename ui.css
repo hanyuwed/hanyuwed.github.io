@@ -107,6 +107,22 @@ input:is([type=search], [type=text]), select { min-height: 46px; max-width: 100%
 .word :is(button, .icon-btn) { min-width: 44px; min-height: 44px; }
 .dictionary-item summary { min-height: 44px; }
 .dictionary-item summary > * { min-width: 0; overflow-wrap: anywhere; }
+
+#wordList .word { grid-template-columns: minmax(105px, .9fr) minmax(0, 1.3fr) auto; gap: 11px; }
+#wordList .word-hanzi { line-height: 1.25; }
+#wordList .word-py { margin: 0; line-height: inherit; }
+#wordList .word-ru { font-size: 1rem; line-height: inherit; }
+#wordList .word button {
+  width: 44px;
+  height: 44px;
+  padding: 0;
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  background: var(--paper);
+  color: var(--ink);
+  font-size: .875rem;
+  font-weight: 600;
+}
 footer { color: var(--muted); }
 
 @media (hover: hover) {
@@ -129,4 +145,8 @@ footer { color: var(--muted); }
   .word { padding-inline: 10px; }
   :is(.filters, .session-tools) { flex-wrap: wrap; }
   .deck-nav > span { text-align: center; padding-inline: 6px; }
+}
+
+@media (max-width: 360px) {
+  #wordList .word { grid-template-columns: minmax(80px, .8fr) minmax(0, 1.25fr) auto; gap: 6px; }
 }
